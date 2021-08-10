@@ -4,6 +4,7 @@ import inspect
 import logging
 import os
 import pkgutil
+import typing
 from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
@@ -81,4 +82,7 @@ class Plugins(object):
                     _id=doc["_id"],
                     _index=doc["_index"],
                 )
+                if isinstance(doc, typing.List) or isinstance(doc, typing.Tuple):
+                    docs.extend(doc)
+                    break
             yield doc

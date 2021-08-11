@@ -799,8 +799,13 @@ class Sync(Base):
                 if self.es.version[0] < 7:
                     doc["_type"] = "_doc"
 
+                # if self._plugins:
+                #     doc = next(self._plugins.transform([doc]))
                 if self._plugins:
-                    doc = next(self._plugins.transform([doc]))
+                    xs = self._plugins.transform([doc])
+
+                    while x := next(xs, None):
+                        yield {**doc, **x}
 
                 if self.pipeline:
                     doc["pipeline"] = self.pipeline

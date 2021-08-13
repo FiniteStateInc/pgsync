@@ -87,7 +87,8 @@ class Plugins(object):
                 )
 
                 if isinstance(dx, typing.List) or isinstance(dx, typing.Tuple):
-                    docs.extend(dx)
+                    for item in dx:
+                        docs.append(item)
                     skip_doc = True
                     break
                 else:

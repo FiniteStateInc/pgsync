@@ -800,20 +800,19 @@ class Sync(Base):
                     doc["_type"] = "_doc"
 
                 plugin_output_n = 0
+
                 if self._plugins:
                     xs = self._plugins.transform([doc])
 
                     while x := next(xs, None):
-                        plugin_output_n = plugin_output_n + 1
-
                         if self.pipeline:
                             x["pipeline"] = self.pipeline
 
+                        plugin_output_n += 1
+
                         yield {**doc, **x}
 
-                print(f"plugin_output_count={plugin_output_n}")
-
-                # skip current doc if plugin returned multiple records
+                # skip record when plugin has returned multiple records
                 if plugin_output_n > 1:
                     continue
 

@@ -6,8 +6,8 @@ RUN apt-get update \
 ARG WORKDIR=/code
 RUN mkdir $WORKDIR
 ADD ./examples/ $WORKDIR/examples
+RUN cd pgsync/ && pip install -e .
 WORKDIR $WORKDIR
-RUN pip install pgsync
 COPY ./docker/wait-for-it.sh wait-for-it.sh
 COPY ./docker/runserver.sh runserver.sh
 RUN chmod +x wait-for-it.sh

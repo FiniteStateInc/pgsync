@@ -799,13 +799,23 @@ class Sync(Base):
                 if self.es.version[0] < 7:
                     doc["_type"] = "_doc"
 
-                # if self._plugins:
-                #     doc = next(self._plugins.transform([doc]))
+                plugin_output_n = 0
                 if self._plugins:
                     xs = self._plugins.transform([doc])
 
                     while x := next(xs, None):
+                        plugin_output_n = plugin_output_n + 1
+
+                        if self.pipeline:
+                            x["pipeline"] = self.pipeline
+
                         yield {**doc, **x}
+
+                print(f"plugin_output_count={plugin_output_n}")
+
+                # skip current doc if plugin returned multiple records
+                if plugin_output_n > 1:
+                    continue
 
                 if self.pipeline:
                     doc["pipeline"] = self.pipeline

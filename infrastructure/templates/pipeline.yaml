@@ -60,7 +60,7 @@ Resources:
                 CloudWatchLogs:
                     GroupName: !Ref BuildLogGroupPGSync
                     Status: ENABLED
-            ServiceRole: !Sub arn:aws:iam::${AWS::AccountId}:role/App-CodebuildRole
+            ServiceRole: !Sub arn:aws:iam::${AWS::AccountId}:role/PGSync-CodebuildRole
             Source:
                 BuildSpec: pgsync/build_spec.yml
                 Type: CODEPIPELINE

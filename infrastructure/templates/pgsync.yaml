@@ -95,21 +95,6 @@ Resources:
               - DatadogAPMEnabled
               - ddtrace-run
               - Ref: AWS::NoValue
-            - /main.py
-            - --bootstrap-server
-            - "kafka.{{env}}.fstate.ninja:9092"
-            - --group-id
-            - pgsync_{{env + instance}}
-            - --redis-host
-            - redisbloom{{instance}}.{{env}}.fstate.ninja
-            - --redis-port
-            - 6379
-            - --topic
-            # {% if instance == '' %}
-            - plugin_recent_output
-            # {% else %}
-            - plugin_recent_output-{{env}}{{instance}}
-            # {% endif %}
           DependsOn:
             - Fn::If:
               - DatadogEnabled
@@ -152,6 +137,6 @@ Resources:
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      TaskRoleArn: arn:aws:iam::{{target_account_id}}:role/Firmware-Services-PGSync-ECSTaskRole
+      TaskRoleArn: arn:aws:iam::{{target_account_id}}:role/PGSync-ECSTaskRole
 
 

@@ -1,0 +1,157 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: pgsync {{env + instance}} infrastructure
+
+Conditions:
+  ProdDeploy: !Equals [ "{{env}}", prod]
+  DatadogEnabled: !Not [ Condition: ProdDeploy ]
+  DatadogAPMEnabled:
+    Condition: DatadogEnabled
+
+Parameters: 
+  ImageUri:
+    Type: String
+    Description: ECR Image URI for pgsync
+
+Resources:
+  EcsTaskSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for pgsync ecs task instances.
+      GroupName: pgsync-{{env + instance}}-ecs-task-sg
+      SecurityGroupIngress: []
+      VpcId: "{{vpc_id}}"
+
+  PGSyncEcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: pgsync-cluster-{{env + instance}}
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+  PGSyncLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/pgsync-{{env + instance}}
+      RetentionInDays: 7
+
+  PGSync:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref PGSyncEcsCluster
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - !Ref EcsTaskSecurityGroup
+          Subnets: !Split [ ",", "{{private_subnets}}" ]
+      # PropagateTags: TASK_DEFINITION
+      ServiceName: pgsync_service
+      TaskDefinition: !Ref PGSyncTask
+
+  PGSyncTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ContainerDefinitions:
+        - Environment:
+          - Name: EXECUTION_ENV
+            Value: ecs
+          - Name: STAGE
+            Value: "{{env + instance}}"
+          - Name: DD_ENV
+            Value:
+              Fn::If:
+              - DatadogEnabled
+              - "{{env + instance}}"
+              - Ref: AWS::NoValue
+          - Name: DD_SERVICE
+            Value:
+              Fn::If:
+              - DatadogEnabled
+              - pgsync_{{env + instance}}
+              - Ref: AWS::NoValue
+          - Name: DATADOG_TRACE_ENABLED
+            Value:
+              Fn::If:
+              - DatadogEnabled
+              - Fn::If:
+                - DatadogAPMEnabled
+                - "true"
+                - "false"
+              - Ref: AWS::NoValue
+          Essential: true
+          Image: !Ref ImageUri
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref PGSyncLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Name: pgsync_service
+          Command:
+            - Fn::If:
+              - DatadogAPMEnabled
+              - ddtrace-run
+              - Ref: AWS::NoValue
+            - /main.py
+            - --bootstrap-server
+            - "kafka.{{env}}.fstate.ninja:9092"
+            - --group-id
+            - pgsync_{{env + instance}}
+            - --redis-host
+            - redisbloom{{instance}}.{{env}}.fstate.ninja
+            - --redis-port
+            - 6379
+            - --topic
+            # {% if instance == '' %}
+            - plugin_recent_output
+            # {% else %}
+            - plugin_recent_output-{{env}}{{instance}}
+            # {% endif %}
+          DependsOn:
+            - Fn::If:
+              - DatadogEnabled
+              - ContainerName: datadog-agent
+                Condition: START
+              - Ref: AWS::NoValue
+        - Fn::If:
+          - DatadogEnabled
+          - Name: datadog-agent
+            Environment:
+              - Name: ECS_FARGATE
+                Value: "true"
+              - Name: DD_APM_ENABLED
+                Value:
+                  Fn::If:
+                  - DatadogAPMEnabled
+                  - "true"
+                  - "false"
+              - Name: DD_APM_NON_LOCAL_TRAFFIC
+                Value: "true"
+            Secrets:
+              - Name: DD_API_KEY
+                ValueFrom: "arn:aws:secretsmanager:us-east-1:{{target_account_id}}:secret:thirdparty/datadog/apikey"
+            Essential: true
+            Image: "datadog/agent:latest"
+            LogConfiguration:
+              LogDriver: awslogs
+              Options:
+                awslogs-group: !Ref PGSyncLogGroup
+                awslogs-region: !Ref AWS::Region
+                awslogs-stream-prefix: ecs
+            PortMappings:
+              - Protocol: tcp
+                ContainerPort: 8126
+          - Ref: AWS::NoValue
+      Cpu: 256
+      Memory: 2048
+      ExecutionRoleArn: arn:aws:iam::{{target_account_id}}:role/General-ECSExecutionRole
+      Family: pgsync-{{env + instance}}
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      TaskRoleArn: arn:aws:iam::{{target_account_id}}:role/Firmware-Services-PGSync-ECSTaskRole
+
+

@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "FiniteState App {{env + instance}} Deployment Pipeline"
+Description: "PGSync {{env + instance}} Deployment Pipeline"
 
 Parameters:
     githubOrganizationName:

@@ -9,7 +9,7 @@ Parameters:
     githubRepoName:
         Description: Name of Github Repository
         Type: String
-        Default: finite-state-app
+        Default: pgsync
 
 Mappings:
     environmentMap:
@@ -31,7 +31,7 @@ Resources:
     PGSync:
         Type: AWS::CodeBuild::Project
         Properties:
-            Name: finite-state-app-pgsync-{{env + instance}}
+            Name: finite-state-pgsync-{{env + instance}}
             Artifacts:
                 Type: CODEPIPELINE
             EncryptionKey: "{{codepipeline_kms_key_arn}}"
@@ -68,7 +68,7 @@ Resources:
     BuildLogGroupPGSync:
         Type: AWS::Logs::LogGroup
         Properties:
-            LogGroupName: /aws/codebuild/finite-state-app-pgsync-{{env + instance}}
+            LogGroupName: /aws/codebuild/finite-state-pgsync-{{env + instance}}
             RetentionInDays: 14
 
     ECRPGSync:
@@ -95,7 +95,7 @@ Resources:
     Pipeline:
         Type: AWS::CodePipeline::Pipeline
         Properties:
-            Name: finite-state-app-{{env + instance}}
+            Name: finite-state-pgsync-{{env + instance}}
             ArtifactStore:
                 Type: S3
                 Location: "{{codepipeline_bucket_name}}"
@@ -144,8 +144,8 @@ Resources:
                             Version: "1"
                         Configuration:
                             ActionMode: CREATE_UPDATE
-                            RoleArn: arn:aws:iam::{{target_account_id}}:role/App-PGSync-DeploymentRole
-                            StackName: finite-state-app-pgsync-infra-{{env + instance}}
+                            RoleArn: arn:aws:iam::{{target_account_id}}:role/PGSync-DeploymentRole
+                            StackName: finite-state-PGSync-infra-{{env + instance}}
                             TemplatePath: PGSyncInfraArtifact::resources/pgsync.yaml
                         RoleArn: arn:aws:iam::{{target_account_id}}:role/Infra-Pipeline-CloudformationAccessRole
                       - Name: PGsync-Version
@@ -157,7 +157,7 @@ Resources:
                         Configuration:
                             ApplicationName: finitestate-pgsync-{{env + instance}}
                             EnvironmentName: finitestate-{{env + instance}}
-                        RoleArn: arn:aws:iam::{{target_account_id}}:role/App-PGSync-DeploymentRole
+                        RoleArn: arn:aws:iam::{{target_account_id}}:role/PGSync-DeploymentRole
                         InputArtifacts:
                             - Name: PGSyncVersionArtifact
                         Region: !Ref AWS::Region
@@ -165,7 +165,7 @@ Resources:
     WebHook:
         Type: AWS::CodePipeline::Webhook
         Properties:
-            Name: finite-state-app-{{env + instance}}
+            Name: finite-state-pgsync-{{env + instance}}
             Authentication: GITHUB_HMAC
             AuthenticationConfiguration:
                 SecretToken: "{{ '{{resolve:secretsmanager:' + github_token_arn + '}}' }}"
@@ -181,10 +181,10 @@ Resources:
     StagePipelineChatBotAssociation:
         Type: "AWS::CodeStarNotifications::NotificationRule"
         Properties:
-            Name: finite-state-app-{{env + instance}}
+            Name: finite-state-pgsync-{{env + instance}}
             Status: ENABLED
             DetailType: FULL
-            Resource: !Sub arn:aws:codepipeline:us-east-1:${AWS::AccountId}:finite-state-app-{{env + instance}}
+            Resource: !Sub arn:aws:codepipeline:us-east-1:${AWS::AccountId}:finite-state-pgsync-{{env + instance}}
             EventTypeIds:
                 - codepipeline-pipeline-pipeline-execution-succeeded
                 - codepipeline-pipeline-pipeline-execution-resumed

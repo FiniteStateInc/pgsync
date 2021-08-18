@@ -144,7 +144,7 @@ Resources:
                             Version: "1"
                         Configuration:
                             ActionMode: CREATE_UPDATE
-                            RoleArn: arn:aws:iam::{{target_account_id}}:role/App-DeploymentRole
+                            RoleArn: arn:aws:iam::{{target_account_id}}:role/App-PGSync-DeploymentRole
                             StackName: finite-state-app-pgsync-infra-{{env + instance}}
                             TemplatePath: PGSyncInfraArtifact::resources/pgsync.yaml
                         RoleArn: arn:aws:iam::{{target_account_id}}:role/Infra-Pipeline-CloudformationAccessRole
@@ -157,7 +157,7 @@ Resources:
                         Configuration:
                             ApplicationName: finitestate-pgsync-{{env + instance}}
                             EnvironmentName: finitestate-{{env + instance}}
-                        RoleArn: arn:aws:iam::{{target_account_id}}:role/App-DeploymentRole
+                        RoleArn: arn:aws:iam::{{target_account_id}}:role/App-PGSync-DeploymentRole
                         InputArtifacts:
                             - Name: PGSyncVersionArtifact
                         Region: !Ref AWS::Region

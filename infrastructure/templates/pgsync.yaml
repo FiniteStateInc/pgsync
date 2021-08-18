@@ -130,7 +130,7 @@ Resources:
               - Protocol: tcp
                 ContainerPort: 8126
           - Ref: AWS::NoValue
-      Cpu: 256
+      Cpu: 2048
       Memory: 2048
       ExecutionRoleArn: arn:aws:iam::{{target_account_id}}:role/General-ECSExecutionRole
       Family: pgsync-{{env + instance}}

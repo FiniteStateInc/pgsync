@@ -445,41 +445,69 @@ class Sync(Base):
                     for key, value in primary_fields.items():
                         fields[key].append(0)
 
-                for doc_id in self.es._search(self.index, node.table, fields):
+                # Experimental. Previously, the code would ask elastic search for all the parents involved to
+                # build out the where clause. If we have many parents referencing the same child (obs def -> obs)
+                # then we are going to have scaling issues.
+                # However, at least one level down, we know that the parent has a reference to the child by id so we
+                # can just select  all the parents that have the child id match. A single where rather than thousands
+                # of "where a or b or c or d...".
+                # I think there are still issues here with respect to a deeper hierarchy that need to be tackled,
+                # so this is probably insufficient, but it's a good start. (i.e. this only handles the case where
+                # parent == root right now.   If a child of a child of a child changes then we need to trigger
+                # updates accordingly. TODO
+                fkeys_alltables = self.query_builder._get_foreign_keys(
+                    node.parent,
+                    node,
+                )
+                fkeys = fkeys_alltables[root.name]
+                for key, value in primary_fields.items():
                     where = {}
-                    params = doc_id.split(PRIMARY_KEY_DELIMITER)
-                    for i, key in enumerate(root.model.primary_keys):
-                        where[key] = params[i]
-                    _filters.append(where)
 
-                # also handle foreign_keys
-                if node.parent:
-                    fields = collections.defaultdict(list)
-                    foreign_keys = self.query_builder._get_foreign_keys(
-                        node.parent,
-                        node,
-                    )
-                    foreign_values = [
-                        payload.get("new", {}).get(k)
-                        for k in foreign_keys[node.name]
-                    ]
+                    for fkey in fkeys:
+                        where[fkey] = value
+                    _filters.append(where);
+                    fields[key].append(value)
+                    if None in payload["new"].values():
+                        extra["table"] = node.table
+                        extra["column"] = key
 
-                    for key in [key.name for key in node.primary_keys]:
-                        for value in foreign_values:
-                            if value:
-                                fields[key].append(value)
-                    # TODO: we should combine this with the filter above
-                    # so we only hit Elasticsearch once
-                    for doc_id in self.es._search(
-                        self.index,
-                        node.parent.table,
-                        fields,
-                    ):
-                        where = {}
-                        params = doc_id.split(PRIMARY_KEY_DELIMITER)
-                        for i, key in enumerate(root.model.primary_keys):
-                            where[key] = params[i]
-                        _filters.append(where)
+
+                # This grabs all the parent ids from the es based on child id. e.g. grabs observations based on obs. defs
+                # for doc_id in self.es._search(self.index, node.table, fields):
+                #     where = {}
+                #     params = doc_id.split(PRIMARY_KEY_DELIMITER)
+                #     for i, key in enumerate(root.model.primary_keys):
+                #         where[key] = params[i]
+                #     _filters.append(where)
+                #
+                # # also handle foreign_keys
+                # if node.parent:
+                #     fields = collections.defaultdict(list)
+                #     foreign_keys = self.query_builder._get_foreign_keys(
+                #         node.parent,
+                #         node,
+                #     )
+                #     foreign_values = [
+                #         payload.get("new", {}).get(k)
+                #         for k in foreign_keys[node.name]
+                #     ]
+                #
+                #     for key in [key.name for key in node.primary_keys]:
+                #         for value in foreign_values:
+                #             if value:
+                #                 fields[key].append(value)
+                #     # TODO: we should combine this with the filter above
+                #     # so we only hit Elasticsearch once
+                #     for doc_id in self.es._search(
+                #         self.index,
+                #         node.parent.table,
+                #         fields,
+                #     ):
+                #         where = {}
+                #         params = doc_id.split(PRIMARY_KEY_DELIMITER)
+                #         for i, key in enumerate(root.model.primary_keys):
+                #             where[key] = params[i]
+                #         _filters.append(where)
 
                 if _filters:
                     filters[root.table].extend(_filters)

@@ -74,7 +74,7 @@ Resources:
     ECRPGSync:
       Type: AWS::ECR::Repository
       Properties:
-        RepositoryName: finite-state-apps/pgsync{{env + instance}}
+        RepositoryName: finite-state-apps/pgsync-{{env + instance}}
         RepositoryPolicyText:
             Version: "2012-10-17"
             Statement:

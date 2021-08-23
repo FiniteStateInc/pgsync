@@ -477,8 +477,6 @@ class Sync(Base):
                     for key, value in primary_fields.items():
 
                         for fkey in root_foreign_keys:
-                            if fkey in parent_references:
-                                continue
                             where = {fkey: value}
                             _filters.append(where);
                         if None in payload["new"].values():

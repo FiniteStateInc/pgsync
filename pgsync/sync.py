@@ -124,9 +124,9 @@ class Sync(Base):
                     "usesuper",
                 )
                 or self.has_permission(
-                    self.engine.url.username,
-                    "userepl",
-                )
+                self.engine.url.username,
+                "userepl",
+            )
             ):
                 raise SuperUserError(
                     f'PG_USER "{self.engine.url.username}" needs to be '
@@ -459,22 +459,72 @@ class Sync(Base):
                     node.parent,
                     node,
                 )
-                fkeys = fkeys_alltables[root.name]
-                for key, value in primary_fields.items():
-                    where = {}
 
-                    for fkey in fkeys:
-                        where[fkey] = value
-                    _filters.append(where);
-                    fields[key].append(value)
-                    if None in payload["new"].values():
-                        extra["table"] = node.table
-                        extra["column"] = key
+                # Deal with parent primary keys that match up with our foreign key. indicates parent needs to change
+                es_updated = False
+                root_foreign_keys = fkeys_alltables[root.name]
+                for pkey in root.primary_keys:
+                    for fkey in root_foreign_keys:
+                        if pkey.name == fkey:
+                            # Primary key of table matches foreign key reference. Add where clause for parent
+                            # If payload old fkey == payload new fkey we can optimize. For now, we hit es for
+                            # context as we don't know if they are different or not. Additionally, the "OR" optimization
+                            # below is probably not necessary since this will just be a handful of items.
+                            _filters = _filters + self._update_using_es(payload, root, node, fields)
+                            es_updated = True
+
+                if not es_updated:
+                    for key, value in primary_fields.items():
+
+                        for fkey in root_foreign_keys:
+                            if fkey in parent_references:
+                                continue
+                            where = {fkey: value}
+                            _filters.append(where);
+                        if None in payload["new"].values():
+                            extra["table"] = node.table
+                            extra["column"] = key
 
                 if _filters:
                     filters[root.table].extend(_filters)
 
         return filters
+
+    def _update_using_es(self, payload, root, node, fields):
+        _es_based_filters = []
+        for doc_id in self.es._search(self.index, node.table, fields):
+            params = doc_id.split(PRIMARY_KEY_DELIMITER)
+            where = {key: params[i] for i, key in enumerate(root.model.primary_keys)}
+            _es_based_filters.append(where)
+
+        # also handle foreign_keys
+        if node.parent:
+            fields = collections.defaultdict(list)
+            foreign_keys = self.query_builder._get_foreign_keys(
+                node.parent,
+                node,
+            )
+            foreign_values = [
+                payload.get("new", {}).get(k)
+                for k in foreign_keys[node.name]
+            ]
+
+            for key in [key.name for key in node.primary_keys]:
+                for value in foreign_values:
+                    if value:
+                        fields[key].append(value)
+            # TODO: we should combine this with the filter above
+            # so we only hit Elasticsearch once
+            for doc_id in self.es._search(
+                self.index,
+                node.parent.table,
+                fields,
+            ):
+                params = doc_id.split(PRIMARY_KEY_DELIMITER)
+                where = {key: params[i] for i, key in enumerate(root.model.primary_keys)}
+                _es_based_filters.append(where)
+
+            return _es_based_filters
 
     def _delete(self, node, root, filters, payloads):
 
@@ -631,7 +681,6 @@ class Sync(Base):
         extra = {}
 
         if tg_op == INSERT:
-
             filters = self._insert(
                 node,
                 root,
@@ -640,7 +689,6 @@ class Sync(Base):
             )
 
         if tg_op == UPDATE:
-
             filters = self._update(
                 node,
                 root,
@@ -650,7 +698,6 @@ class Sync(Base):
             )
 
         if tg_op == DELETE:
-
             filters = self._delete(
                 node,
                 root,
@@ -659,7 +706,6 @@ class Sync(Base):
             )
 
         if tg_op == TRUNCATE:
-
             filters = self._truncate(node, root, filters)
 
         # If there are no filters, then don't execute the sync query
@@ -772,7 +818,7 @@ class Sync(Base):
                     row[META][extra["table"]][extra["column"]].append(0)
 
                 if self.verbose:
-                    print(f"{(i+1)})")
+                    print(f"{(i + 1)})")
                     print(f"Pkeys: {primary_keys}")
                     pprint.pprint(row)
                     print("-" * 10)

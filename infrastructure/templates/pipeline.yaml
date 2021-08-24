@@ -134,6 +134,10 @@ Resources:
                             Version: "1"
                         Configuration:
                             ProjectName: !Ref PGSync
+                        InputArtifacts:
+                            - Name: SourceArtifact
+                        OutputArtifacts:
+                            - Name: PGSyncArtifacts
                 - Name: "Deploy-{{env + instance}}"
                   Actions:
                       - Name: PGSync-Infrastructure

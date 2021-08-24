@@ -152,20 +152,6 @@ Resources:
                             StackName: finite-state-PGSync-infra-{{env + instance}}
                             TemplatePath: PGSyncInfraArtifact::resources/pgsync.yaml
                         RoleArn: arn:aws:iam::{{target_account_id}}:role/Infra-Pipeline-CloudformationAccessRole
-                      - Name: PGsync-Version
-                        ActionTypeId:
-                            Category: Deploy
-                            Owner: AWS
-                            Provider: ECS
-                            Version: "1"
-                        Configuration:
-                            ApplicationName: finitestate-pgsync-{{env + instance}}
-                            EnvironmentName: finitestate-{{env + instance}}
-                        RoleArn: arn:aws:iam::{{target_account_id}}:role/PGSync-DeploymentRole
-                        InputArtifacts:
-                            - Name: PGSyncVersionArtifact
-                        Region: !Ref AWS::Region
-                        RunOrder: 2
     WebHook:
         Type: AWS::CodePipeline::Webhook
         Properties:

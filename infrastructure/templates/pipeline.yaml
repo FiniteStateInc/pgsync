@@ -95,7 +95,7 @@ Resources:
     Pipeline:
         Type: AWS::CodePipeline::Pipeline
         Properties:
-            Name: finite-state-pgsync-{{env + instance}-pipeline}
+            Name: finite-state-pgsync-{{env + instance}-pipeline
             ArtifactStore:
                 Type: S3
                 Location: "{{codepipeline_bucket_name}}"

@@ -28,7 +28,7 @@ Mappings:
 
 Resources:
   # PGSyncBase
-    PGSyncBaseBuild:
+    BuildPGSyncBase:
         Type: AWS::CodeBuild::Project
         Properties:
             Name: finite-state-pgsync-{{env + instance}}
@@ -62,7 +62,7 @@ Resources:
                     Status: ENABLED
             ServiceRole: !Sub arn:aws:iam::${AWS::AccountId}:role/Infra-Pipeline-CodebuildRole
             Source:
-                BuildSpec: infrastructure/build_spec.yml
+                BuildSpec: infrastructure/pgsbase_build_spec.yml
                 Type: CODEPIPELINE
 
     BuildLogGroupPGSync:
@@ -119,6 +119,8 @@ Resources:
                             Owner: !Ref githubOrganizationName
                             PollForSourceChanges: "false"
                             Repo: !Ref githubRepoName
+                        OutputArtifacts:
+                            - Name: SourceArtifact    
                         Namespace: SourceVariables
                         Region: !Ref AWS::Region
                         RunOrder: 1
@@ -131,7 +133,11 @@ Resources:
                             Provider: CodeBuild
                             Version: "1"
                         Configuration:
-                            ProjectName: !Ref PGSyncBaseBuild
+                            ProjectName: !Ref BuildPGSyncBase
+                        InputArtifacts:
+                            - Name: SourceArtifact
+                        OutputArtifacts:
+                            - Name: BuildPGSyncBaseArtifact
 
     WebHook:
         Type: AWS::CodePipeline::Webhook

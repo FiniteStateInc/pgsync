@@ -34,10 +34,3 @@ phases:
           MANIFEST=$(aws ecr batch-get-image --repository-name ${REPO_NAME} --image-ids imageTag=$CODEBUILD_RESOLVED_SOURCE_VERSION --query 'images[].imageManifest' --output text)
           aws ecr put-image --repository-name ${REPO_NAME} --image-tag latest --image-manifest "$MANIFEST"
         fi
-
-      # Write image url to param file for cloudformation
-      - printf '{"Image":"%s"}' "$ECR_URL:$CODEBUILD_RESOLVED_SOURCE_VERSION" > ${CODEBUILD_SRC_DIR}/infrastructure/params.json
-artifacts:
-      files:
-        - "**/*"
-      base-directory: infrastructure

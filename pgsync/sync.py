@@ -12,10 +12,13 @@ import select
 import sys
 import time
 from datetime import datetime, timedelta
+from botocore.exceptions import ClientError
 
 import click
 import psycopg2
 import sqlalchemy as sa
+from environs import Env
+import boto3
 
 from . import __version__
 from .base import Base, compiled_query
@@ -75,6 +78,8 @@ class Sync(Base):
         self._plugins = None
         self._truncate = False
         self._checkpoint_file = f".{self.__name}"
+        self.checkpoint_from_s3 = False
+        self.checkpoint_to_s3_error = False
         self.redis = RedisQueue(self.__name)
         self.tree = Tree(self)
         self._last_truncate_timestamp = datetime.now()
@@ -884,7 +889,21 @@ class Sync(Base):
 
     @property
     def checkpoint(self):
-        """Save the current txid as the checkpoint."""
+        env = Env()
+        env.read_env()
+        use_s3 = env.bool("CHECKPOINT_FILE_IN_S3", default=False)
+        s3_bucket = env.str("CHECKPOINT_FILE_S3_BUCKET", default="finitestate-firmware-env-pgsync")
+        if use_s3 and not self.checkpoint_to_s3_error:
+            try:
+                s3_client = boto3.client('s3')
+                s3_client.download_file(s3_bucket, "checkpoint_txid", self._checkpoint_file)
+                self.checkpoint_from_s3 = True
+            except ClientError as e:
+                logger.error("unable to download checkpoint file from s3", e)
+                self.checkpoint_from_s3 = False
+        else:
+            self.checkpoint_from_s3 = False       
+
         if os.path.exists(self._checkpoint_file):
             with open(self._checkpoint_file, "r") as fp:
                 self._checkpoint = int(fp.read().split()[0])
@@ -892,10 +911,29 @@ class Sync(Base):
 
     @checkpoint.setter
     def checkpoint(self, value=None):
+        """Save the current txid as the checkpoint."""
         if value is None:
             raise ValueError("Cannot assign a None value to checkpoint")
+
         with open(self._checkpoint_file, "w+") as fp:
             fp.write(f"{value}\n")
+
+        env = Env()
+        env.read_env()
+        use_s3 = env.bool("CHECKPOINT_FILE_IN_S3", default=False)
+        s3_bucket = env.str("CHECKPOINT_FILE_S3_BUCKET", default="finitestate-firmware-env-pgsync")
+        if use_s3:
+            try:
+                s3_client = boto3.client('s3')
+                s3_resource = boto3.resource('s3')
+                bucket_exists = s3_resource.Bucket(s3_bucket).creation_date is not None
+                if not bucket_exists:
+                    s3_client.create_bucket(Bucket=s3_bucket)
+                s3_client.upload_file(self._checkpoint_file, s3_bucket, "checkpoint_txid")
+            except ClientError as e:
+                logger.error("unable to upload checkpoint file to s3", e)
+                self.checkpoint_to_s3_error = True
+
         self._checkpoint = value
 
     @threaded

@@ -12,6 +12,8 @@ services:
   redis:
     image: redis
     command: redis-server --requirepass PLEASE_CHANGE_ME
+    ports:
+      - "6379:6379"
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.14.0
     ports:

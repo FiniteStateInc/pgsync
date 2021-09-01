@@ -80,6 +80,7 @@ Ready to contribute? Here's how to set up `pgsync` for local development.
    tests, including testing other Python versions with tox::
 
     $ flake8 pgsync tests
+    $ docker-compose -f docker-compose.development.yml up -d
     $ ./scripts/run_tests.sh
     $ tox
 

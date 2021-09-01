@@ -11,5 +11,4 @@ fi
 
 source .env.development
 source .pythonpath
-docker-compose -f docker-compose.development.yml up -d
 pytest -x -s -vv --cov=pgsync --cov-report term-missing --cov-report=xml:tests/coverage.xml tests ${@}

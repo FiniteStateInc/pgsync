@@ -11,12 +11,9 @@ phases:
       python: 3.8
   pre_build:
     commands:
-      - cd ${CODEBUILD_SRC_DIR}/infrastructure
-      - pip install -r requirements.txt
+      - echo nothing to do in prebuild for base image build job
   build:
     commands:
-      - python make.py --environment ${ENVIRONMENT} --instance ${INSTANCE}
-
       # Build/push image to ECR
       - cd ${CODEBUILD_SRC_DIR}
       - docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN

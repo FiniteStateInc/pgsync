@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "PGSync {{env + instance}} Deployment Pipeline"
+Description: "PGSync Base Image Build {{env + instance}} Pipeline"
 
 Parameters:
     githubOrganizationName:
@@ -27,8 +27,8 @@ Mappings:
             branch: master
 
 Resources:
-  # PGSync
-    PGSync:
+  # PGSyncBase
+    PGSyncBaseBuild:
         Type: AWS::CodeBuild::Project
         Properties:
             Name: finite-state-pgsync-{{env + instance}}
@@ -60,18 +60,18 @@ Resources:
                 CloudWatchLogs:
                     GroupName: !Ref BuildLogGroupPGSync
                     Status: ENABLED
-            ServiceRole: !Sub arn:aws:iam::${AWS::AccountId}:role/PGSync-CodebuildRole
+            ServiceRole: !Sub arn:aws:iam::${AWS::AccountId}:role/Infra-Pipeline-CodebuildRole
             Source:
-                BuildSpec: pgsync/build_spec.yml
+                BuildSpec: infrastructure/build_spec.yml
                 Type: CODEPIPELINE
 
     BuildLogGroupPGSync:
         Type: AWS::Logs::LogGroup
         Properties:
-            LogGroupName: /aws/codebuild/finite-state-pgsync-{{env + instance}}
+            LogGroupName: /aws/codebuild/finite-state-pgsbase-{{env + instance}}
             RetentionInDays: 14
 
-    ECRPGSync:
+    ECRPGSyncBase:
       Type: AWS::ECR::Repository
       Properties:
         RepositoryName: finite-state-apps/pgsync-{{env + instance}}
@@ -95,7 +95,7 @@ Resources:
     Pipeline:
         Type: AWS::CodePipeline::Pipeline
         Properties:
-            Name: finite-state-pgsync-{{env + instance}}-pipeline
+            Name: finite-state-pgsbase-{{env + instance}}-pipeline
             ArtifactStore:
                 Type: S3
                 Location: "{{codepipeline_bucket_name}}"
@@ -119,43 +119,24 @@ Resources:
                             Owner: !Ref githubOrganizationName
                             PollForSourceChanges: "false"
                             Repo: !Ref githubRepoName
-                        OutputArtifacts:
-                            - Name: SourceArtifact
                         Namespace: SourceVariables
                         Region: !Ref AWS::Region
                         RunOrder: 1
                 - Name: Build
                   Actions:
-                      - Name: PGSync
+                      - Name: PGSyncBaseBuild
                         ActionTypeId:
                             Category: Build
                             Owner: AWS
                             Provider: CodeBuild
                             Version: "1"
                         Configuration:
-                            ProjectName: !Ref PGSync
-                        InputArtifacts:
-                            - Name: SourceArtifact
-                        OutputArtifacts:
-                            - Name: PGSyncArtifacts
-                - Name: "Deploy-{{env + instance}}"
-                  Actions:
-                      - Name: PGSync-Infrastructure
-                        ActionTypeId:
-                            Category: Deploy
-                            Owner: AWS
-                            Provider: CloudFormation
-                            Version: "1"
-                        Configuration:
-                            ActionMode: CREATE_UPDATE
-                            RoleArn: arn:aws:iam::{{target_account_id}}:role/PGSync-DeploymentRole
-                            StackName: finite-state-PGSync-infra-{{env + instance}}
-                            TemplatePath: PGSyncInfraArtifact::resources/pgsync.yaml
-                        RoleArn: arn:aws:iam::{{target_account_id}}:role/Infra-Pipeline-CloudformationAccessRole
+                            ProjectName: !Ref PGSyncBaseBuild
+
     WebHook:
         Type: AWS::CodePipeline::Webhook
         Properties:
-            Name: finite-state-pgsync-{{env + instance}}
+            Name: finite-state-pgsbase-{{env + instance}}
             Authentication: GITHUB_HMAC
             AuthenticationConfiguration:
                 SecretToken: "{{ '{{resolve:secretsmanager:' + github_token_arn + '}}' }}"
@@ -171,10 +152,10 @@ Resources:
     StagePipelineChatBotAssociation:
         Type: "AWS::CodeStarNotifications::NotificationRule"
         Properties:
-            Name: finite-state-pgsync-{{env + instance}}
+            Name: finite-state-pgsbase-{{env + instance}}
             Status: ENABLED
             DetailType: FULL
-            Resource: !Sub arn:aws:codepipeline:us-east-1:${AWS::AccountId}:finite-state-pgsync-{{env + instance}}
+            Resource: !Sub arn:aws:codepipeline:us-east-1:${AWS::AccountId}:finite-state-pgsbase-{{env + instance}}
             EventTypeIds:
                 - codepipeline-pipeline-pipeline-execution-succeeded
                 - codepipeline-pipeline-pipeline-execution-resumed

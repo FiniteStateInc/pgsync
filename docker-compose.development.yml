@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: debezium/postgres:13-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=pgsync
+      - POSTGRES_PASSWORD=PLEASE_CHANGE_ME
+      - POSTGRES_DB=airbnb
+  redis:
+    image: redis
+    command: redis-server
+    ports:
+      - "6379:6379"
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.14.0
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      - xpack.security.enabled=false
+      - network.host=127.0.0.1
+      - http.host=0.0.0.0
+  pgsync:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ./runserver.sh
+    sysctls:
+      - net.ipv4.tcp_keepalive_time=200
+      - net.ipv4.tcp_keepalive_intvl=200
+      - net.ipv4.tcp_keepalive_probes=5
+    labels:
+      org.label-schema.name: "pgsync"
+      org.label-schema.description: "Postgres to elasticsearch sync"
+      com.label-schema.service-type: "daemon"
+    depends_on:
+      - postgres
+      - redis
+      - elasticsearch
+    environment:
+      - PG_USER=pgsync
+      - PG_HOST=postgres
+      - PG_PASSWORD=PLEASE_CHANGE_ME
+      - LOG_LEVEL=INFO
+      - ELASTICSEARCH_PORT=9200
+      - ELASTICSEARCH_SCHEME=http
+      - ELASTICSEARCH_HOST=elasticsearch
+      - REDIS_HOST=redis
+      #- REDIS_AUTH=PLEASE_CHANGE_ME

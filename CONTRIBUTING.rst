@@ -66,8 +66,8 @@ Ready to contribute? Here's how to set up `pgsync` for local development.
 
 3. Install your local copy into a virtualenv. Assuming you have virtualenvwrapper installed, this is how you set up your fork for local development::
 
-    $ mkvirtualenv pgsync
     $ cd pgsync/
+    $ mkvirtualenv pgsync
     $ python setup.py develop
 
 4. Create a branch for local development::
@@ -80,7 +80,7 @@ Ready to contribute? Here's how to set up `pgsync` for local development.
    tests, including testing other Python versions with tox::
 
     $ flake8 pgsync tests
-    $ python setup.py test or py.test
+    $ ./scripts/run_tests.sh
     $ tox
 
    To get flake8 and tox, just pip install them into your virtualenv.

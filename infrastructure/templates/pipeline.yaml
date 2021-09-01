@@ -60,7 +60,7 @@ Resources:
                 CloudWatchLogs:
                     GroupName: !Ref BuildLogGroupPGSync
                     Status: ENABLED
-            ServiceRole: !Sub arn:aws:iam::${AWS::AccountId}:role/Infra-Pipeline-CodebuildRole
+            ServiceRole: !Sub arn:aws:iam::${AWS::AccountId}:role/App-CodebuildRole
             Source:
                 BuildSpec: infrastructure/pgsbase_build_spec.yml
                 Type: CODEPIPELINE
@@ -154,25 +154,4 @@ Resources:
             TargetPipeline: !Ref Pipeline
             TargetPipelineVersion: !GetAtt Pipeline.Version
 
-  # Notifications
-    StagePipelineChatBotAssociation:
-        Type: "AWS::CodeStarNotifications::NotificationRule"
-        Properties:
-            Name: finite-state-pgsbase-{{env + instance}}
-            Status: ENABLED
-            DetailType: FULL
-            Resource: !Sub arn:aws:codepipeline:us-east-1:${AWS::AccountId}:finite-state-pgsbase-{{env + instance}}
-            EventTypeIds:
-                - codepipeline-pipeline-pipeline-execution-succeeded
-                - codepipeline-pipeline-pipeline-execution-resumed
-                - codepipeline-pipeline-pipeline-execution-superseded
-                - codepipeline-pipeline-manual-approval-succeeded
-                - codepipeline-pipeline-pipeline-execution-started
-                - codepipeline-pipeline-pipeline-execution-canceled
-                - codepipeline-pipeline-action-execution-failed
-                - codepipeline-pipeline-manual-approval-needed
-                - codepipeline-pipeline-manual-approval-failed
-            Targets:
-                - TargetAddress: "{{app_deployment_notifications_arn}}"
-                  TargetType: SNS
 

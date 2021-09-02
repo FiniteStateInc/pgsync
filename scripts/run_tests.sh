@@ -9,6 +9,6 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
-source .env.development
+source .env.unittest
 source .pythonpath
 pytest -x -s -vv --cov=pgsync --cov-report term-missing --cov-report=xml:tests/coverage.xml tests ${@}

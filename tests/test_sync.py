@@ -3,10 +3,6 @@ from collections import namedtuple
 
 import pytest
 from mock import patch
-import os
-import random
-import string
-import boto3
 
 ROW = namedtuple("Row", ["data", "xid"])
 
@@ -69,45 +65,3 @@ class TestSync(object):
                     )
                     mock_get.assert_called_once()
                     mock_sync_payloads.assert_called_once()
-
-    @pytest.mark.skip(reason="let's not bang on s3 when unit testing")
-    def test_checkpoint_file_in_s3(self, sync):
-        os.environ['CHECKPOINT_FILE_IN_S3'] = "True"
-        random_string = ''.join(random.choice(string.ascii_lowercase) for i in range(10))
-        random_bucket = f"finitestate-firmware-env-pgsync-{random_string}"
-        os.environ['CHECKPOINT_FILE_S3_BUCKET'] = random_bucket
-        random_int = random.randint(0,1234)
-        sync.checkpoint = random_int
-        assert sync.checkpoint == random_int
-        assert sync.checkpoint_from_s3
-        s3_resource = boto3.resource('s3')
-        bucket = s3_resource.Bucket(random_bucket)
-        bucket.objects.all().delete()
-        bucket.delete()
-    
-    @pytest.mark.skip(reason="let's not bang on s3 when unit testing")
-    def test_checkpoint_file_in_s3_set_twice(self, sync):
-        os.environ['CHECKPOINT_FILE_IN_S3'] = "True"
-        random_string = ''.join(random.choice(string.ascii_lowercase) for i in range(10))
-        random_bucket = f"finitestate-firmware-env-pgsync-{random_string}"
-        os.environ['CHECKPOINT_FILE_S3_BUCKET'] = random_bucket
-        random_int = random.randint(0,1234)
-        sync.checkpoint = random_int
-        assert sync.checkpoint == random_int
-        assert sync.checkpoint_from_s3
-        random_int += 1
-        sync.checkpoint = random_int
-        assert sync.checkpoint == random_int
-        assert sync.checkpoint_from_s3
-        s3_resource = boto3.resource('s3')
-        bucket = s3_resource.Bucket(random_bucket)
-        bucket.objects.all().delete()
-        bucket.delete()
-
-    @pytest.mark.skip(reason="let's not bang on s3 when unit testing")
-    def test_checkpoint_file_not_in_s3(self, sync):
-        os.environ['CHECKPOINT_FILE_IN_S3'] = "False"
-        random_int = random.randint(0,1234)
-        sync.checkpoint = random_int
-        assert sync.checkpoint == random_int
-        assert not sync.checkpoint_from_s3

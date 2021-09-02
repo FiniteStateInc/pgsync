@@ -6,6 +6,7 @@ import itertools
 import json
 import logging
 import os
+from os import path
 import pprint
 import re
 import select
@@ -901,12 +902,12 @@ class Sync(Base):
             except ClientError as e:
                 logger.error("unable to download checkpoint file from s3", e)
                 self.checkpoint_from_s3 = False
+                raise
         else:
-            self.checkpoint_from_s3 = False       
-
-        if os.path.exists(self._checkpoint_file):
-            with open(self._checkpoint_file, "r") as fp:
-                self._checkpoint = int(fp.read().split()[0])
+            self.checkpoint_from_s3 = False
+            if os.path.exists(self._checkpoint_file):
+                with open(self._checkpoint_file, "r") as fp:
+                    self._checkpoint = int(fp.read().split()[0])
         return self._checkpoint
 
     @checkpoint.setter
@@ -928,12 +929,14 @@ class Sync(Base):
                 s3_resource = boto3.resource('s3')
                 bucket_exists = s3_resource.Bucket(s3_bucket).creation_date is not None
                 if not bucket_exists:
+                    logger.info(f"creating bucket {s3_bucket} for checkpoint file storage")
                     s3_client.create_bucket(Bucket=s3_bucket)
                 s3_client.upload_file(self._checkpoint_file, s3_bucket, "checkpoint_txid")
+                logger.info(f"successfully uploaded checkpoint file {self._checkpoint_file} to {s3_bucket}")
             except ClientError as e:
                 logger.error("unable to upload checkpoint file to s3", e)
                 self.checkpoint_to_s3_error = True
-
+                raise
         self._checkpoint = value
 
     @threaded

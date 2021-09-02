@@ -905,9 +905,9 @@ class Sync(Base):
                 raise
         else:
             self.checkpoint_from_s3 = False
-            if os.path.exists(self._checkpoint_file):
-                with open(self._checkpoint_file, "r") as fp:
-                    self._checkpoint = int(fp.read().split()[0])
+        if os.path.exists(self._checkpoint_file):
+            with open(self._checkpoint_file, "r") as fp:
+                self._checkpoint = int(fp.read().split()[0])
         return self._checkpoint
 
     @checkpoint.setter

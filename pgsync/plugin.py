@@ -4,6 +4,7 @@ import inspect
 import logging
 import os
 import pkgutil
+import typing
 from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
@@ -74,11 +75,26 @@ class Plugins(object):
     def transform(self, docs):
         """Apply all plugins to each doc."""
         for doc in docs:
+            skip_doc = False
+
             for plugin in self.plugins:
                 logger.debug(f"Plugin: {plugin.name}")
-                doc["_source"] = plugin.transform(
+
+                dx = plugin.transform(
                     doc["_source"],
                     _id=doc["_id"],
                     _index=doc["_index"],
                 )
+
+                if isinstance(dx, typing.List) or isinstance(dx, typing.Tuple):
+                    for item in dx:
+                        docs.append(item)
+                    skip_doc = True
+                    break
+                else:
+                    doc["_source"] = dx
+
+            if skip_doc:
+                continue
+
             yield doc

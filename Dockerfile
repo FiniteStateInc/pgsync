@@ -5,9 +5,9 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 ARG WORKDIR=/code
 RUN mkdir $WORKDIR
-ADD ./examples/ $WORKDIR/examples
+ADD ./ $WORKDIR/pgsync
 WORKDIR $WORKDIR
-RUN pip install pgsync
+RUN pip install ./pgsync
 COPY ./docker/wait-for-it.sh wait-for-it.sh
 COPY ./docker/runserver.sh runserver.sh
 RUN chmod +x wait-for-it.sh

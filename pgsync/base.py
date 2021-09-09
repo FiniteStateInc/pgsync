@@ -23,7 +23,7 @@ from .constants import (
     TRIGGER_FUNC,
     UPDATE,
 )
-from .exc import ForeignKeyError, ParseLogicalSlotError, TableNotFoundError
+from .exc import ForeignKeyError, LogicalSlotParseError, TableNotFoundError
 from .settings import PG_SSLMODE, PG_SSLROOTCERT, QUERY_CHUNK_SIZE
 from .trigger import CREATE_TRIGGER_TEMPLATE
 from .utils import get_postgres_url
@@ -57,7 +57,7 @@ class Base(object):
         self.__metadata = {}
         self.verbose = verbose
 
-    def connect(self):
+    def connect(self) -> None:
         """Connect to database."""
         try:
             conn = self.__engine.connect()
@@ -66,7 +66,7 @@ class Base(object):
             logger.exception(f"Cannot connect to database: {e}")
             raise
 
-    def pg_settings(self, column):
+    def pg_settings(self, column) -> None:
         try:
             return self.fetchone(
                 sa.select([sa.column("setting")])
@@ -77,7 +77,7 @@ class Base(object):
         except (TypeError, IndexError):
             return None
 
-    def has_permission(self, username, permission):
+    def has_permission(self, username: str, permission: str) -> bool:
         """Check if the given user is a superuser or replication user.
 
         Args:
@@ -110,7 +110,7 @@ class Base(object):
         return False
 
     # Tables...
-    def model(self, table, schema):
+    def model(self, table: str, schema: str):
         """Get an SQLAlchemy model representation from a table.
 
         Args:
@@ -152,8 +152,7 @@ class Base(object):
 
     @property
     def session(self):
-        connection = self.__engine.connect()
-        Session = sessionmaker(bind=connection, autoflush=True)
+        Session = sessionmaker(bind=self.__engine.connect(), autoflush=True)
         return Session()
 
     @property
@@ -219,8 +218,7 @@ class Base(object):
     def truncate_schema(self, schema):
         """Truncate all tables in a schema."""
         logger.debug(f"Truncating schema: {schema}")
-        tables = self.tables(schema)
-        self.truncate_tables(tables, schema=schema)
+        self.truncate_tables(self.tables(schema), schema=schema)
 
     def truncate_schemas(self):
         """Truncate all tables in a database."""
@@ -386,20 +384,24 @@ class Base(object):
         return (
             sa.select(
                 [
-                    sa.func.REVERSE(
-                        sa.func.SPLIT_PART(
-                            sa.func.REVERSE(
-                                sa.cast(
+                    sa.func.REPLACE(
+                        sa.func.REVERSE(
+                            sa.func.SPLIT_PART(
+                                sa.func.REVERSE(
                                     sa.cast(
-                                        pg_index.c.indrelid,
-                                        sa.dialects.postgresql.REGCLASS,
-                                    ),
-                                    sa.Text,
-                                )
-                            ),
-                            ".",
-                            1,
-                        )
+                                        sa.cast(
+                                            pg_index.c.indrelid,
+                                            sa.dialects.postgresql.REGCLASS,
+                                        ),
+                                        sa.Text,
+                                    )
+                                ),
+                                ".",
+                                1,
+                            )
+                        ),
+                        '"',
+                        "",
                     ).label("table_name"),
                     sa.func.ARRAY_AGG(pg_attribute.c.attname).label(
                         "primary_keys"
@@ -432,7 +434,12 @@ class Base(object):
                             sa.dialects.postgresql.REGCLASS,
                         ),
                         sa.Text,
-                    ).in_(tables),
+                    ).in_(
+                        map(
+                            self.__engine.dialect.identifier_preparer.quote,
+                            tables,
+                        )
+                    ),
                     pg_attribute.c.attnum == sa.any_(pg_index.c.indkey),
                 ]
             )
@@ -773,7 +780,7 @@ class Base(object):
 
         match = LOGICAL_SLOT_PREFIX.search(row)
         if not match:
-            raise ParseLogicalSlotError(f"No match for row: {row}")
+            raise LogicalSlotParseError(f"No match for row: {row}")
 
         payload.update(match.groupdict())
         span = match.span()
@@ -784,7 +791,7 @@ class Base(object):
             # this can only be an UPDATE operation
             if payload["tg_op"] != UPDATE:
                 msg = f"Unknown {payload['tg_op']} operation for row: {row}"
-                raise ParseLogicalSlotError(msg)
+                raise LogicalSlotParseError(msg)
 
             i = suffix.index("old-key:")
             if i > -1:
@@ -802,7 +809,7 @@ class Base(object):
             # this can be an INSERT, DELETE, UPDATE or TRUNCATE operation
             if payload["tg_op"] not in TG_OP:
                 msg = f"Unknown {payload['tg_op']} operation for row: {row}"
-                raise ParseLogicalSlotError(msg)
+                raise LogicalSlotParseError(msg)
 
             for key, value in _parse_logical_slot(suffix):
                 payload["new"][key] = value
@@ -857,11 +864,8 @@ class Base(object):
             result = conn.execution_options(stream_results=True).execute(
                 statement.select()
             )
-            while True:
-                chunk = result.fetchmany(chunk_size)
-                if not chunk:
-                    break
-                for keys, row, *primary_keys in chunk:
+            for partition in result.partitions(chunk_size):
+                for keys, row, *primary_keys in partition:
                     yield keys, row, primary_keys
 
     def fetchcount(self, statement):
@@ -1034,7 +1038,7 @@ def create_database(database, echo=False):
     """Create a database."""
     logger.debug(f"Creating database: {database}")
     engine = pg_engine(database="postgres", echo=echo)
-    pg_execute(engine, f"CREATE DATABASE {database}")
+    pg_execute(engine, f'CREATE DATABASE "{database}"')
     logger.debug(f"Created database: {database}")
 
 
@@ -1042,7 +1046,7 @@ def drop_database(database, echo=False):
     """Drop a database."""
     logger.debug(f"Dropping database: {database}")
     engine = pg_engine(database="postgres", echo=echo)
-    pg_execute(engine, f"DROP DATABASE IF EXISTS {database}")
+    pg_execute(engine, f'DROP DATABASE IF EXISTS "{database}"')
     logger.debug(f"Dropped database: {database}")
 
 

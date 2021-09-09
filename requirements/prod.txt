@@ -8,9 +8,9 @@ appdirs==1.4.4
     # via black
 black==21.7b0
     # via -r requirements/base.in
-boto3==1.18.3
+boto3==1.18.17
     # via -r requirements/base.in
-botocore==1.21.3
+botocore==1.21.17
     # via
     #   boto3
     #   s3transfer
@@ -22,21 +22,21 @@ certifi==2021.5.30
     # via
     #   elasticsearch
     #   requests
-charset-normalizer==2.0.3
+charset-normalizer==2.0.4
     # via requests
 click==8.0.1
     # via
     #   -r requirements/base.in
     #   black
-elasticsearch==7.13.4
+elasticsearch==7.14.0
     # via elasticsearch-dsl
 elasticsearch-dsl==7.4.0
     # via -r requirements/base.in
-environs==9.3.2
+environs==9.3.3
     # via -r requirements/base.in
-faker==8.10.1
+faker==8.11.0
     # via -r requirements/base.in
-greenlet==1.1.0
+greenlet==1.1.1
     # via sqlalchemy
 idna==3.2
     # via requests
@@ -44,11 +44,13 @@ jmespath==0.10.0
     # via
     #   boto3
     #   botocore
-marshmallow==3.12.2
-    # via environs
+marshmallow==3.12.0
+    # via
+    #   -r requirements/base.in
+    #   environs
 mypy-extensions==0.4.3
     # via black
-newrelic==6.4.4.161
+newrelic==6.8.0.163
     # via -r requirements/prod.in
 pathspec==0.9.0
     # via black
@@ -59,11 +61,11 @@ python-dateutil==2.8.2
     #   botocore
     #   elasticsearch-dsl
     #   faker
-python-dotenv==0.18.0
+python-dotenv==0.19.0
     # via environs
 redis==3.5.3
     # via -r requirements/base.in
-regex==2021.7.6
+regex==2021.8.3
     # via black
 requests==2.26.0
     # via requests-aws4auth
@@ -76,13 +78,13 @@ six==1.16.0
     #   elasticsearch-dsl
     #   python-dateutil
     #   requests-aws4auth
-sqlalchemy==1.4.21
+sqlalchemy==1.4.22
     # via -r requirements/base.in
 sqlparse==0.4.1
     # via -r requirements/base.in
 text-unidecode==1.3
     # via faker
-tomli==1.0.4
+tomli==1.2.1
     # via black
 urllib3==1.26.6
     # via

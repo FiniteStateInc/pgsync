@@ -932,6 +932,7 @@ class Sync(Base):
         env.read_env()
         use_s3 = env.bool("CHECKPOINT_FILE_IN_S3", default=False)
         s3_bucket = env.str("CHECKPOINT_FILE_S3_BUCKET", default="finitestate-firmware-env-pgsync")
+        s3_bucket_osmethod = os.getenv("CHECKPOINT_FILE_S3_BUCKET", default="osmethoddefult")
         if use_s3 and not self.checkpoint_to_s3_error:
             try:
                 self.create_s3_bucket(s3_bucket)
@@ -945,6 +946,8 @@ class Sync(Base):
                 if status == 404:
                     logger.warning("checkpoint file not found in s3", e)
                 else:
+                    logger.error(f"s3_bucket: {s3_bucket}")
+                    logger.error(f"s3_bucket_osmethod: {s3_bucket_osmethod}")
                     logger.error("unable to download checkpoint file from s3", e)
                     raise
         else:

@@ -84,6 +84,7 @@ class Plugins(object):
                     doc["_source"],
                     _id=doc["_id"],
                     _index=doc["_index"],
+                    _fulldoc=doc,
                 )
 
                 if isinstance(dx, typing.List) or isinstance(dx, typing.Tuple):

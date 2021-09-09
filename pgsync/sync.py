@@ -553,8 +553,8 @@ class Sync(Base):
 
     def _delete(
         self, node: Node, root: Node, filters: Dict, payloads: Dict
-    ) -> None: 
-    
+    ) -> None:
+
         # when deleting a root node, just delete the doc in Elasticsearch
         if node.table == root.table:
 
@@ -935,7 +935,7 @@ class Sync(Base):
         s3_bucket_osmethod = os.getenv("CHECKPOINT_FILE_S3_BUCKET", default="osmethoddefult")
         if use_s3 and not self.checkpoint_to_s3_error:
             try:
-                self.create_s3_bucket(s3_bucket)
+                # self.create_s3_bucket(s3_bucket)
                 s3_client = boto3.client('s3')
                 s3_object = s3_client.get_object(Bucket=s3_bucket, Key=self._checkpoint_file)
                 s3_object_body = s3_object['Body'].read()
@@ -963,7 +963,7 @@ class Sync(Base):
             raise ValueError("Cannot assign a None value to checkpoint")
 
         with open(self._checkpoint_file, "w+") as fp:
-            fp.write(f"{value}\n")    
+            fp.write(f"{value}\n")
 
         env = Env()
         env.read_env()
@@ -971,7 +971,7 @@ class Sync(Base):
         s3_bucket = env.str("CHECKPOINT_FILE_S3_BUCKET", default="finitestate-firmware-env-pgsync-unittest")
         if use_s3:
             try:
-                self.create_s3_bucket(s3_bucket)
+                # self.create_s3_bucket(s3_bucket)
                 s3_client = boto3.client('s3')
                 s3_client.put_object(Bucket=s3_bucket, Body=f'{value}', Key=self._checkpoint_file)
                 logger.info(f"successfully uploaded checkpoint file {self._checkpoint_file} to {s3_bucket}")

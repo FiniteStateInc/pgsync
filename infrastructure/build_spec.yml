@@ -1,0 +1,43 @@
+version: 0.2
+
+env:
+  secrets-manager:
+    DOCKERHUB_USERNAME: shared/dockerhub/token:username
+    DOCKERHUB_TOKEN: shared/dockerhub/token:token
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.8
+  pre_build:
+    commands:
+      - echo nothing to do in prebuild for base image build job
+  build:
+    commands:
+      # Build/push image to ECR
+      - cd ${CODEBUILD_SRC_DIR}
+      - docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
+        # Build using the parent pgsync directory
+      - docker build -t finitestate/pgsync:latest .
+      - docker logout
+
+        # Instance 1 doesn't reflect in ECR name
+      - if [ $INSTANCE  = 1 ]; then INSTANCE=""; fi
+      - REPO_NAME=finite-state-apps/pgsync-${ENVIRONMENT}${INSTANCE}
+      - ECR_URL=$DEPLOY_ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com/${REPO_NAME}
+      - docker tag finitestate/pgsync:latest $ECR_URL:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${DEPLOY_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com
+      - docker push $ECR_URL:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      # Tag image as latest
+      - |
+        if [ "false" = "$(aws ecr describe-images --repository-name ${REPO_NAME} --image-ids imageTag=$CODEBUILD_RESOLVED_SOURCE_VERSION --query 'imageDetails[*].imageTags[*][] | contains(@, `latest`)')" ]; then
+          MANIFEST=$(aws ecr batch-get-image --repository-name ${REPO_NAME} --image-ids imageTag=$CODEBUILD_RESOLVED_SOURCE_VERSION --query 'images[].imageManifest' --output text)
+          aws ecr put-image --repository-name ${REPO_NAME} --image-tag latest --image-manifest "$MANIFEST"
+        fi
+
+      # Write image url to param file for cloudformation
+      - printf '{"Image":"%s"}' "$ECR_URL:$CODEBUILD_RESOLVED_SOURCE_VERSION" > ${CODEBUILD_SRC_DIR}/infrastructure/params.json
+artifacts:
+      files:
+        - "**/*"
+      base-directory: infrastructure

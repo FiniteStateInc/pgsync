@@ -1,0 +1,157 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "PGSync Base Image Build {{env + instance}} Pipeline"
+
+Parameters:
+    githubOrganizationName:
+        Description: Name of Github organization
+        Type: String
+        Default: FiniteStateInc
+    githubRepoName:
+        Description: Name of Github Repository
+        Type: String
+        Default: pgsync
+
+Mappings:
+    environmentMap:
+        dev:
+            branch: dev
+        dev-sca:
+            branch: dev
+        stage:
+            branch: stage
+        stage-sca:
+            branch: stage
+        prod:
+            branch: master
+        prod-sca:
+            branch: master
+
+Resources:
+  # PGSyncBase
+    BuildPGSyncBase:
+        Type: AWS::CodeBuild::Project
+        Properties:
+            Name: finite-state-pgsync-{{env + instance}}
+            Artifacts:
+                Type: CODEPIPELINE
+            EncryptionKey: "{{codepipeline_kms_key_arn}}"
+            Cache:
+                Type: LOCAL
+                Modes:
+                    - LOCAL_DOCKER_LAYER_CACHE
+                    - LOCAL_SOURCE_CACHE
+                    - LOCAL_CUSTOM_CACHE
+            Environment:
+                ComputeType: BUILD_GENERAL1_SMALL
+                EnvironmentVariables:
+                    - Name: ENVIRONMENT
+                      Type: PLAINTEXT
+                      Value: "{{env}}"
+                    - Name: INSTANCE
+                      Type: PLAINTEXT
+                      Value: "{{instance| default('1',true)}}"
+                    - Name: DEPLOY_ACCOUNT
+                      Type: PLAINTEXT
+                      Value: !Ref AWS::AccountId
+                Image: aws/codebuild/standard:5.0
+                Type: LINUX_CONTAINER
+                PrivilegedMode: true
+            LogsConfig:
+                CloudWatchLogs:
+                    GroupName: !Ref BuildLogGroupPGSync
+                    Status: ENABLED
+            ServiceRole: !Sub arn:aws:iam::${AWS::AccountId}:role/App-CodebuildRole
+            Source:
+                BuildSpec: infrastructure/pgsbase_build_spec.yml
+                Type: CODEPIPELINE
+
+    BuildLogGroupPGSync:
+        Type: AWS::Logs::LogGroup
+        Properties:
+            LogGroupName: /aws/codebuild/finite-state-pgsbase-{{env + instance}}
+            RetentionInDays: 14
+
+    ECRPGSyncBase:
+      Type: AWS::ECR::Repository
+      Properties:
+        RepositoryName: finite-state-apps/pgsync-{{env + instance}}
+        RepositoryPolicyText:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: AllowPull
+                Effect: Allow
+                Principal:
+                    AWS:
+                    - arn:aws:iam::{{target_account_id}}:root
+                Action:
+                    - ecr:GetDownloadUrlForLayer
+                    - ecr:BatchGetImage
+                    - ecr:BatchCheckLayerAvailability
+        LifecyclePolicy:
+            LifecyclePolicyText: "{\"rules\":[{\"rulePriority\":1,\"description\":\"retain maximum of 20 images \",\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":20},\"action\":{\"type\":\"expire\"}}]}"
+            RegistryId: !Ref AWS::AccountId
+
+  # Pipeline Definition
+    Pipeline:
+        Type: AWS::CodePipeline::Pipeline
+        Properties:
+            Name: finite-state-pgsbase-{{env + instance}}-pipeline
+            ArtifactStore:
+                Type: S3
+                Location: "{{codepipeline_bucket_name}}"
+                EncryptionKey:
+                    Id: "{{codepipeline_kms_key_arn}}"
+                    Type: KMS
+            RestartExecutionOnUpdate: false
+            RoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/Infra-Pipeline-CodepipelineRole
+            Stages:
+                - Name: Source
+                  Actions:
+                      - Name: GitHub-Fetch
+                        ActionTypeId:
+                            Category: Source
+                            Owner: ThirdParty
+                            Provider: GitHub
+                            Version: "1"
+                        Configuration:
+                            Branch: !Join [ '', [ !FindInMap [environmentMap, "{{env}}", branch], "{{instance}}" ] ]
+                            OAuthToken: "{{ '{{resolve:secretsmanager:' + github_token_arn + '}}' }}"
+                            Owner: !Ref githubOrganizationName
+                            PollForSourceChanges: "false"
+                            Repo: !Ref githubRepoName
+                        OutputArtifacts:
+                            - Name: SourceArtifact    
+                        Namespace: SourceVariables
+                        Region: !Ref AWS::Region
+                        RunOrder: 1
+                - Name: Build
+                  Actions:
+                      - Name: PGSyncBaseBuild
+                        ActionTypeId:
+                            Category: Build
+                            Owner: AWS
+                            Provider: CodeBuild
+                            Version: "1"
+                        Configuration:
+                            ProjectName: !Ref BuildPGSyncBase
+                        InputArtifacts:
+                            - Name: SourceArtifact
+                        OutputArtifacts:
+                            - Name: BuildPGSyncBaseArtifact
+
+    WebHook:
+        Type: AWS::CodePipeline::Webhook
+        Properties:
+            Name: finite-state-pgsbase-{{env + instance}}
+            Authentication: GITHUB_HMAC
+            AuthenticationConfiguration:
+                SecretToken: "{{ '{{resolve:secretsmanager:' + github_token_arn + '}}' }}"
+            Filters:
+                - JsonPath: $.ref
+                  MatchEquals: refs/heads/{Branch}
+            RegisterWithThirdParty: "true"
+            TargetAction: GitHub-Fetch
+            TargetPipeline: !Ref Pipeline
+            TargetPipelineVersion: !GetAtt Pipeline.Version
+
+

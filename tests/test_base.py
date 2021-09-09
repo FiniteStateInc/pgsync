@@ -10,7 +10,7 @@ from pgsync.base import (
     drop_database,
     drop_extension,
 )
-from pgsync.exc import ParseLogicalSlotError, TableNotFoundError
+from pgsync.exc import LogicalSlotParseError, TableNotFoundError
 
 
 @pytest.mark.usefixtures("table_creator")
@@ -134,7 +134,7 @@ class TestBase(object):
         mock_pg_engine.assert_any_call(database="postgres", echo=True)
         mock_pg_execute.assert_any_call(
             connection.engine,
-            f"CREATE DATABASE {database}",
+            f'CREATE DATABASE "{database}"',
         )
 
     @patch("pgsync.base.pg_execute")
@@ -156,7 +156,7 @@ class TestBase(object):
         mock_pg_engine.assert_any_call(database="postgres", echo=True)
         mock_pg_execute.assert_any_call(
             connection.engine,
-            f"DROP DATABASE IF EXISTS {database}",
+            f'DROP DATABASE IF EXISTS "{database}"',
         )
 
     @patch("pgsync.base.pg_execute")
@@ -208,7 +208,7 @@ class TestBase(object):
         connection,
     ):
         pg_base = Base(connection.engine.url.database)
-        with pytest.raises(ParseLogicalSlotError) as excinfo:
+        with pytest.raises(LogicalSlotParseError) as excinfo:
             pg_base.parse_logical_slot("")
             assert "No match for row:" in str(excinfo.value)
 

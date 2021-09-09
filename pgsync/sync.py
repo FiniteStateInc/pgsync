@@ -915,6 +915,17 @@ class Sync(Base):
             logger.exception(f"Exception {e}")
             raise
 
+    def create_s3_bucket(self, bucket_name):
+        s3_resource = boto3.resource('s3')
+        bucket_exists = s3_resource.Bucket(bucket_name).creation_date is not None
+        if not bucket_exists:
+            logger.info(f"creating bucket {bucket_name} for checkpoint file storage")
+            s3_client = boto3.client('s3')
+            s3_client.create_bucket(Bucket=bucket_name)
+
+    # mimic existing local checkpoint file behavior
+    # if checkpoint file doesn't exist simply return None
+    # if there is a s3 client error (like a local file system error) re-raise exception
     @property
     def checkpoint(self):
         env = Env()
@@ -924,17 +935,24 @@ class Sync(Base):
         if use_s3 and not self.checkpoint_to_s3_error:
             try:
                 s3_client = boto3.client('s3')
-                s3_client.download_file(s3_bucket, "checkpoint_txid", self._checkpoint_file)
+                self.create_s3_bucket(s3_bucket)
+                s3_client.download_file(s3_bucket, self._checkpoint_file, self._checkpoint_file)
                 self.checkpoint_from_s3 = True
             except ClientError as e:
-                logger.error("unable to download checkpoint file from s3", e)
-                self.checkpoint_from_s3 = False
-                raise
+                status = e.response["ResponseMetadata"]["HTTPStatusCode"]
+                if status == 404:
+                    logger.warning("checkpoint file not found in s3", e)
+                else:
+                    logger.error("unable to download checkpoint file from s3", e)
+                    raise
+            if os.path.exists(self._checkpoint_file):
+                with open(self._checkpoint_file, "r") as fp:
+                    self._checkpoint = int(fp.read().split()[0])
         else:
             self.checkpoint_from_s3 = False
-        if os.path.exists(self._checkpoint_file):
-            with open(self._checkpoint_file, "r") as fp:
-                self._checkpoint = int(fp.read().split()[0])
+            if os.path.exists(self._checkpoint_file):
+                with open(self._checkpoint_file, "r") as fp:
+                    self._checkpoint = int(fp.read().split()[0])
         return self._checkpoint
 
     @checkpoint.setter
@@ -943,26 +961,26 @@ class Sync(Base):
             raise ValueError("Cannot assign a None value to checkpoint")
 
         with open(self._checkpoint_file, "w+") as fp:
-            fp.write(f"{value}\n")
+            fp.write(f"{value}\n")    
 
         env = Env()
         env.read_env()
         use_s3 = env.bool("CHECKPOINT_FILE_IN_S3", default=False)
-        s3_bucket = env.str("CHECKPOINT_FILE_S3_BUCKET", default="finitestate-firmware-env-pgsync")
+        s3_bucket = env.str("CHECKPOINT_FILE_S3_BUCKET", default="finitestate-firmware-env-pgsync-unittest")
         if use_s3:
             try:
+                self.create_s3_bucket(s3_bucket)
                 s3_client = boto3.client('s3')
-                s3_resource = boto3.resource('s3')
-                bucket_exists = s3_resource.Bucket(s3_bucket).creation_date is not None
-                if not bucket_exists:
-                    logger.info(f"creating bucket {s3_bucket} for checkpoint file storage")
-                    s3_client.create_bucket(Bucket=s3_bucket)
-                s3_client.upload_file(self._checkpoint_file, s3_bucket, "checkpoint_txid")
+                s3_client.upload_file(self._checkpoint_file, s3_bucket, self._checkpoint_file)
                 logger.info(f"successfully uploaded checkpoint file {self._checkpoint_file} to {s3_bucket}")
             except ClientError as e:
                 logger.error("unable to upload checkpoint file to s3", e)
                 self.checkpoint_to_s3_error = True
                 raise
+        else:
+            with open(self._checkpoint_file, "w+") as fp:
+                fp.write(f"{value}\n")
+
         self._checkpoint = value
 
     @threaded

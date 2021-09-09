@@ -70,7 +70,6 @@ class TestCheckpointS3(object):
         os.environ['CHECKPOINT_FILE_S3_BUCKET'] = s3_bucket
         assert sync.checkpoint is None
         
-    @pytest.mark.skip(reason="let's not bang on s3 when unit testing")
     def test_checkpoint_file_not_in_s3(self, sync):
         os.environ['CHECKPOINT_FILE_IN_S3'] = "False"
         random_int = random.randint(0,1234)

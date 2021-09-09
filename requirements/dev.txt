@@ -41,7 +41,7 @@ coverage==5.5
     #   pytest-cov
 distlib==0.3.2
     # via virtualenv
-elasticsearch==7.14.0
+elasticsearch==7.13.4
     # via elasticsearch-dsl
 elasticsearch-dsl==7.4.0
     # via -r requirements/base.in

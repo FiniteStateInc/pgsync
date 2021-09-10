@@ -67,6 +67,13 @@ class Sync(Base):
         validate: Optional[bool] = True,
         repl_slots: Optional[bool] = True,
     ):
+        try:
+            sts_client = boto3.client('sts')
+            logger.info(f"AWS Account in pgsync.__name__: {sts_client.get_caller_identity()}")
+            print(f'AWS Account in pgsync.__init__: {sts_client.get_caller_identity()}')
+        except Exception as e:
+            logger.warn("unable to get aws account information", e)
+
         """Constructor."""
         params = params or {}
         self.index = document["index"]

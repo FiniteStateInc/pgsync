@@ -937,7 +937,8 @@ class Sync(Base):
             try:
                 # self.create_s3_bucket(s3_bucket)
                 s3_client = boto3.resource('s3')
-                s3_object = s3_client.get_object(Bucket=s3_bucket, Key=self._checkpoint_file)
+                #s3_object = s3_client.get_object(Bucket=s3_bucket, Key=self._checkpoint_file)
+                s3_object = s3_client.Object(s3_bucket, self._checkpoint_file).get()
                 s3_object_body = s3_object['Body'].read()
                 self._checkpoint = int(s3_object_body)
                 self.checkpoint_from_s3 = True
@@ -973,7 +974,9 @@ class Sync(Base):
             try:
                 # self.create_s3_bucket(s3_bucket)
                 s3_client = boto3.resource('s3')
-                s3_client.put_object(Bucket=s3_bucket, Body=f'{value}', Key=self._checkpoint_file)
+                #s3_client.put_object(Bucket=s3_bucket, Body=f'{value}', Key=self._checkpoint_file)
+                s3_client.Object(s3_bucket, self._checkpoint_file).put()
+                
                 logger.info(f"successfully uploaded checkpoint file {self._checkpoint_file} to {s3_bucket}")
             except ClientError as e:
                 logger.error("unable to upload checkpoint file to s3", e)

@@ -11,6 +11,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import array
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import Values
+import boto3
 
 from .constants import (
     BUILTIN_SCHEMAS,
@@ -56,6 +57,9 @@ class Base(object):
         self.models = {}
         self.__metadata = {}
         self.verbose = verbose
+
+        sts_client = boto3.client('sts')
+        logger.info(f"AWS Account: {sts_client.get_caller_identity()}")
 
     def connect(self) -> None:
         """Connect to database."""

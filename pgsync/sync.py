@@ -916,6 +916,8 @@ class Sync(Base):
             raise
 
     def create_s3_bucket(self, bucket_name):
+        sts_client = boto3.client('sts')
+        logger.info(f"AWS Account: {sts_client.get_caller_identity()}")
         s3_resource = boto3.resource('s3')
         bucket_exists = s3_resource.Bucket(bucket_name).creation_date is not None
         if not bucket_exists:
@@ -935,12 +937,9 @@ class Sync(Base):
         s3_bucket_osmethod = os.getenv("CHECKPOINT_FILE_S3_BUCKET", default="osmethoddefult")
         if use_s3 and not self.checkpoint_to_s3_error:
             try:
-                # self.create_s3_bucket(s3_bucket)
-                s3_client = boto3.resource('s3')
-                #s3_object = s3_client.get_object(Bucket=s3_bucket, Key=self._checkpoint_file)
-                s3_object = s3_client.Object(s3_bucket, self._checkpoint_file).get()
-                s3_object_body = s3_object['Body'].read()
-                self._checkpoint = int(s3_object_body)
+                self.create_s3_bucket(s3_bucket)
+                s3_client = boto3.client('s3')
+                s3_client.download_file(s3_bucket, self._checkpoint_file, self._checkpoint_file)
                 self.checkpoint_from_s3 = True
             except ClientError as e:
                 status = e.response["ResponseMetadata"]["HTTPStatusCode"]
@@ -951,6 +950,9 @@ class Sync(Base):
                     logger.error(f"s3_bucket_osmethod: {s3_bucket_osmethod}")
                     logger.error("unable to download checkpoint file from s3", e)
                     raise
+                if os.path.exists(self._checkpoint_file):
+                    with open(self._checkpoint_file, "r") as fp:
+                        self._checkpoint = int(fp.read().split()[0])
         else:
             self.checkpoint_from_s3 = False
             if os.path.exists(self._checkpoint_file):
@@ -972,11 +974,9 @@ class Sync(Base):
         s3_bucket = env.str("CHECKPOINT_FILE_S3_BUCKET", default="finitestate-firmware-env-pgsync-unittest")
         if use_s3:
             try:
-                # self.create_s3_bucket(s3_bucket)
-                s3_client = boto3.resource('s3')
-                #s3_client.put_object(Bucket=s3_bucket, Body=f'{value}', Key=self._checkpoint_file)
-                s3_client.Object(s3_bucket, self._checkpoint_file).put()
-                
+                self.create_s3_bucket(s3_bucket)
+                s3_client = boto3.client('s3')
+                s3_client.upload_file(self._checkpoint_file, s3_bucket, self._checkpoint_file)  
                 logger.info(f"successfully uploaded checkpoint file {self._checkpoint_file} to {s3_bucket}")
             except ClientError as e:
                 logger.error("unable to upload checkpoint file to s3", e)

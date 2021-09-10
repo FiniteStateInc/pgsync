@@ -8,7 +8,9 @@ from os import path
 import random
 import string
 import boto3
-from botocore.exceptions import ClientError
+import logging
+
+logger = logging.getLogger(__name__)
 
 @pytest.mark.usefixtures("table_creator")
 class TestCheckpointS3(object):
@@ -28,6 +30,8 @@ class TestCheckpointS3(object):
             bucket.delete()
         if path.exists(sync._checkpoint_file):
             os.unlink(sync._checkpoint_file)
+        sts_client = boto3.client('sts')
+        logger.info(f"AWS Account: {sts_client.get_caller_identity()}")
 
     @pytest.mark.skip(reason="let's not bang on s3 when unit testing")
     def test_checkpoint_file_in_s3(self, sync, s3_bucket):

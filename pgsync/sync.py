@@ -936,7 +936,7 @@ class Sync(Base):
         if use_s3 and not self.checkpoint_to_s3_error:
             try:
                 # self.create_s3_bucket(s3_bucket)
-                s3_client = boto3.client('s3')
+                s3_client = boto3.resource('s3')
                 s3_object = s3_client.get_object(Bucket=s3_bucket, Key=self._checkpoint_file)
                 s3_object_body = s3_object['Body'].read()
                 self._checkpoint = int(s3_object_body)
@@ -972,7 +972,7 @@ class Sync(Base):
         if use_s3:
             try:
                 # self.create_s3_bucket(s3_bucket)
-                s3_client = boto3.client('s3')
+                s3_client = boto3.resource('s3')
                 s3_client.put_object(Bucket=s3_bucket, Body=f'{value}', Key=self._checkpoint_file)
                 logger.info(f"successfully uploaded checkpoint file {self._checkpoint_file} to {s3_bucket}")
             except ClientError as e:

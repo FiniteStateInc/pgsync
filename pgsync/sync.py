@@ -95,6 +95,8 @@ class Sync(Base):
             self.validate(repl_slots=repl_slots)
             self.create_setting()
         self.query_builder = QueryBuilder(self, verbose=self.verbose)
+        sts_client = boto3.client('sts')
+        logger.info(f"AWS Account: {sts_client.get_caller_identity()}")
 
     def validate(self, repl_slots: Optional[bool] = True):
         """Perform all validation right away."""
@@ -916,8 +918,6 @@ class Sync(Base):
             raise
 
     def create_s3_bucket(self, bucket_name):
-        sts_client = boto3.client('sts')
-        logger.info(f"AWS Account: {sts_client.get_caller_identity()}")
         s3_resource = boto3.resource('s3')
         bucket_exists = s3_resource.Bucket(bucket_name).creation_date is not None
         if not bucket_exists:

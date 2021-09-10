@@ -95,8 +95,6 @@ class Sync(Base):
             self.validate(repl_slots=repl_slots)
             self.create_setting()
         self.query_builder = QueryBuilder(self, verbose=self.verbose)
-        sts_client = boto3.client('sts')
-        logger.info(f"AWS Account: {sts_client.get_caller_identity()}")
 
     def validate(self, repl_slots: Optional[bool] = True):
         """Perform all validation right away."""
@@ -930,6 +928,12 @@ class Sync(Base):
     # if there is a s3 client error (like a local file system error) re-raise exception
     @property
     def checkpoint(self):
+        try:
+            sts_client = boto3.client('sts')
+            logger.info(f"AWS Account in sync.checkpoint.get: {sts_client.get_caller_identity()}")
+        except Exception as e:
+            logger.warn("unable to get aws account information", e)
+
         env = Env()
         env.read_env()
         use_s3 = env.bool("CHECKPOINT_FILE_IN_S3", default=False)
@@ -1221,6 +1225,12 @@ def main(
     config = get_config(config)
 
     show_settings(config, params)
+
+    try:
+        sts_client = boto3.client('sts')
+        logger.info(f"AWS Account in sync.main: {sts_client.get_caller_identity()}")
+    except Exception as e:
+        logger.warn("unable to get aws account information", e)
 
     with Timer():
         for document in json.load(open(config)):

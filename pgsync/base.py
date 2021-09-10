@@ -58,8 +58,11 @@ class Base(object):
         self.__metadata = {}
         self.verbose = verbose
 
-        sts_client = boto3.client('sts')
-        logger.info(f"AWS Account: {sts_client.get_caller_identity()}")
+        try:
+            sts_client = boto3.client('sts')
+            logger.info(f"AWS Account in base.__init__: {sts_client.get_caller_identity()}")
+        except Exception as e:
+            logger.warn("unable to get aws account information", e)
 
     def connect(self) -> None:
         """Connect to database."""

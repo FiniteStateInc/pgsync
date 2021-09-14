@@ -780,9 +780,7 @@ class Sync(Base):
                             .data(
                                 [
                                     (
-                                        getattr(
-                                            node.model.c, column
-                                        ).type.python_type(value),
+                                        self.getattr_withlog(column, node, value),
                                     )
                                     for value in values
                                 ]
@@ -793,6 +791,15 @@ class Sync(Base):
                 )
             else:
                 node._filters.append(sa.or_(*_filters))
+
+    def getattr_withlog(self, column, node, value):
+        try:
+            return getattr(
+                    node.model.c, column
+                ).type.python_type(value)
+        except Exception:
+            logger.error(f"column: {column}  node: {node}  value: {value}")
+            raise
 
     def _sync(
         self,

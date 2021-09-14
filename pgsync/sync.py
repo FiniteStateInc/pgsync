@@ -798,7 +798,7 @@ class Sync(Base):
                     node.model.c, column
                 ).type.python_type(value)
         except Exception:
-            logger.error(f"column: {column}  node: {node}  value: {value}")
+            logger.error(f"column: {column}  node: {node}  value: {value}  node model c: {node.model.c}")
             raise
 
     def _sync(

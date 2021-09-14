@@ -490,28 +490,32 @@ class Sync(Base):
 
                 # Deal with parent primary keys that match up with our foreign key. indicates parent needs to change
                 es_updated = False
-                root_foreign_keys = fkeys_alltables[root.name]
-                for pkey in root.primary_keys:
-                    for fkey in root_foreign_keys:
-                        if pkey.name == fkey:
-                            # Primary key of table matches foreign key reference. Add where clause for parent
-                            # If payload old fkey == payload new fkey we can optimize. For now, we hit es for
-                            # context as we don't know if they are different or not. Additionally, the "OR" optimization
-                            # below is probably not necessary since this will just be a handful of items.
-                            _filters = _filters + self._update_using_es(payload, root, node, fields)
-                            es_updated = True
-
-                if not es_updated:
-                    for key, value in primary_fields.items():
+                if root.name not in fkeys_alltables.keys():
+                    logger.warning(f"Foreign keys not available for: {root.name}  node: {node}")
+                else:
+                    root_foreign_keys = fkeys_alltables[root.name]
+                    for pkey in root.primary_keys:
                         for fkey in root_foreign_keys:
-                            where = {fkey: value}
-                            _filters.append(where);
-                        if None in payload["new"].values():
-                            extra["table"] = node.table
-                            extra["column"] = key
+                            if pkey.name == fkey:
+                                # Primary key of table matches foreign key reference. Add where clause for parent
+                                # If payload old fkey == payload new fkey we can optimize. For now, we hit es for
+                                # context as we don't know if they are different or not. Additionally, the "OR" optimization
+                                # below is probably not necessary since this will just be a handful of items.
+                                _filters = _filters + self._update_using_es(payload, root, node, fields)
+                                es_updated = True
 
-                if _filters:
-                    filters[root.table].extend(_filters)
+
+                    if not es_updated:
+                        for key, value in primary_fields.items():
+                            for fkey in root_foreign_keys:
+                                where = {fkey: value}
+                                _filters.append(where);
+                            if None in payload["new"].values():
+                                extra["table"] = node.table
+                                extra["column"] = key
+
+                    if _filters:
+                        filters[root.table].extend(_filters)
 
         return filters
 
@@ -961,7 +965,7 @@ class Sync(Base):
         if use_s3:
             try:
                 s3_client = boto3.client('s3')
-                s3_client.upload_file(self._checkpoint_file, s3_bucket, self._checkpoint_file)  
+                s3_client.upload_file(self._checkpoint_file, s3_bucket, self._checkpoint_file)
                 logger.info(f"successfully uploaded checkpoint file {self._checkpoint_file} to {s3_bucket}")
             except ClientError as e:
                 logger.error("unable to upload checkpoint file to s3", e)

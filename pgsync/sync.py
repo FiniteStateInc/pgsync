@@ -981,6 +981,7 @@ class Sync(Base):
         else:
             with open(self._checkpoint_file, "w+") as fp:
                 fp.write(f"{value}\n")
+                logger.info(f"Successfully checkpointed file locally")
 
         self._checkpoint = value
 
@@ -1013,10 +1014,16 @@ class Sync(Base):
         i = 0
         j = 0
 
+        # Every 10th timeout display a message. Every minute with defaults
+        diagnostic_message_interval = 60
+        if logger.isEnabledFor(logging.DEBUG):
+            # Bump up the interval to every second.
+            diagnostic_message_interval = 10
+
         while True:
             # NB: consider reducing POLL_TIMEOUT to increase throughout
             if select.select([conn], [], [], POLL_TIMEOUT) == ([], [], []):
-                if i % 10 == 0:
+                if i % diagnostic_message_interval == 0:
                     sys.stdout.write(f"Polling db {channel}: {j:,} item(s)\n")
                     sys.stdout.flush()
                 i += 1

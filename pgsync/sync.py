@@ -817,31 +817,35 @@ class Sync(Base):
 
         for node in traverse_post_order(root):
 
-            self._build_filters(filters, node)
+            try:
+                self._build_filters(filters, node)
 
-            if node.is_root:
-                if txmin:
-                    node._filters.append(
-                        sa.cast(
+                if node.is_root:
+                    if txmin:
+                        node._filters.append(
                             sa.cast(
-                                node.model.c.xmin,
-                                sa.Text,
-                            ),
-                            sa.BigInteger,
+                                sa.cast(
+                                    node.model.c.xmin,
+                                    sa.Text,
+                                ),
+                                sa.BigInteger,
+                            )
+                            >= txmin
                         )
-                        >= txmin
-                    )
-                if txmax:
-                    node._filters.append(
-                        sa.cast(
+                    if txmax:
+                        node._filters.append(
                             sa.cast(
-                                node.model.c.xmin,
-                                sa.Text,
-                            ),
-                            sa.BigInteger,
+                                sa.cast(
+                                    node.model.c.xmin,
+                                    sa.Text,
+                                ),
+                                sa.BigInteger,
+                            )
+                            < txmax
                         )
-                        < txmax
-                    )
+            except Exception as e:
+                logger.error(f"Filter building problem: {filters}")
+                logger.error(f"Error: {e}")
 
             try:
                 self.query_builder.build_queries(node)

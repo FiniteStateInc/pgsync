@@ -18,9 +18,11 @@ from typing import Dict, Generator, List, Optional
 import click
 import psycopg2
 import sqlalchemy as sa
+from sqlalchemy import cast, String
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.sql import Values
 from environs import Env
 import boto3
-from sqlalchemy.sql import Values
 
 from . import __version__
 from .base import Base, compiled_query, get_foreign_keys
@@ -794,9 +796,11 @@ class Sync(Base):
 
     def getattr_withlog(self, column, node, value):
         try:
-            return getattr(
-                    node.model.c, column
-                ).type.python_type(value)
+            stype = getattr(node.model.c, column).type
+            if type(stype) == sa.dialects.postgresql.base.UUID:
+                return cast(str(value), postgresql.UUID)
+            else:
+                return stype.python_type(value)
         except Exception:
             logger.error(f"column: {column}  node: {node}  value: {value}  node model c: {node.model.c}")
             raise
@@ -845,7 +849,7 @@ class Sync(Base):
                         )
             except Exception as e:
                 logger.error(f"Filter building problem: {filters}")
-                logger.error(f"Error: {e}")
+                logger.exception(f"Exception: {e}")
 
             try:
                 self.query_builder.build_queries(node)

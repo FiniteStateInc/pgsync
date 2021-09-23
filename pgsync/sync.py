@@ -979,8 +979,10 @@ class Sync(Base):
         s3_bucket = env.str("CHECKPOINT_FILE_S3_BUCKET", default="finitestate-firmware-env-pgsync-unittest")
         if use_s3:
             try:
-                s3_client = boto3.client('s3')
-                s3_client.upload_file(self._checkpoint_file, s3_bucket, self._checkpoint_file)
+                s3_client = boto3.resource('s3')
+                s3_obj =s3_client.Object(s3_bucket, self._checkpoint_file)
+                s3_obj.put(Body=value)
+                # s3_client.upload_file(self._checkpoint_file, s3_bucket, self._checkpoint_file)
                 logger.info(f"successfully uploaded checkpoint file {self._checkpoint_file} to {s3_bucket}")
             except ClientError as e:
                 logger.error("unable to upload checkpoint file to s3", e)

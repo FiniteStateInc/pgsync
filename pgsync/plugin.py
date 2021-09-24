@@ -87,11 +87,13 @@ class Plugins(object):
                     _fulldoc=doc,
                 )
 
-                if isinstance(dx, typing.List) or isinstance(dx, typing.Tuple):
+                if isinstance(dx, (typing.List, typing.Tuple)):
                     for item in dx:
                         docs.append(item)
                     skip_doc = True
                     break
+                elif dx is None:
+                    skip_doc = True
                 else:
                     doc["_source"] = dx
 

@@ -955,14 +955,12 @@ class Sync(Base):
                 else:
                     logger.error("unable to download checkpoint file from s3", e)
                     raise
-                if os.path.exists(self._checkpoint_file):
-                    with open(self._checkpoint_file, "r") as fp:
-                        self._checkpoint = int(fp.read().split()[0])
         else:
             self.checkpoint_from_s3 = False
-            if os.path.exists(self._checkpoint_file):
-                with open(self._checkpoint_file, "r") as fp:
-                    self._checkpoint = int(fp.read().split()[0])
+
+        if os.path.exists(self._checkpoint_file):
+            with open(self._checkpoint_file, "r") as fp:
+                self._checkpoint = int(fp.read().split()[0])
         return self._checkpoint
 
     @checkpoint.setter
@@ -981,7 +979,7 @@ class Sync(Base):
             try:
                 s3_client = boto3.resource('s3')
                 s3_obj =s3_client.Object(s3_bucket, self._checkpoint_file)
-                s3_obj.put(Body=value)
+                s3_obj.put(Body=str(value))
                 # s3_client.upload_file(self._checkpoint_file, s3_bucket, self._checkpoint_file)
                 logger.info(f"successfully uploaded checkpoint file {self._checkpoint_file} to {s3_bucket}")
             except ClientError as e:

@@ -24,6 +24,8 @@ class Plugins(object):
         self.package = package
         self.names = names or []
         self.reload()
+        sorted(self.plugins, key=lambda plugin: self.names.index(plugin.name))
+        logger.info(f"plugins will run in this order: {list(map(lambda plugin: plugin.name, self.plugins))}")
 
     def reload(self):
         """Reload the plugins from the available list."""
@@ -31,6 +33,8 @@ class Plugins(object):
         self._paths = []
         logger.debug(f"Reloading plugins from package: {self.package}")
         self.walk(self.package)
+        self.plugins = sorted(self.plugins, key=lambda plugin: self.names.index(plugin.name))
+        logger.info(f"plugins will run in this order: {list(map(lambda plugin: plugin.name, self.plugins))}")
 
     def walk(self, package):
         """Recursively walk the supplied package and fetch all plugins"""

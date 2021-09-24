@@ -8,7 +8,7 @@ jobs:
     strategy:
       max-parallel: 4
       matrix:
-        python-version: [3.6, 3.7, 3.8, 3.9]
+        python-version: [3.8, 3.9]
     services:
       postgres:
         image: debezium/postgres:13-alpine
@@ -25,7 +25,7 @@ jobs:
         ports:
           - 6379:6379
       elasticsearch:
-        image: docker.elastic.co/elasticsearch/elasticsearch:7.13.2
+        image: docker.elastic.co/elasticsearch/elasticsearch:7.14.0
         ports:
           - 9200:9200
           - 9300:9300
@@ -68,12 +68,12 @@ jobs:
         ELASTICSEARCH_HOST: localhost
         LOGSTASH_HOST: localhost
         PG_PORT: ${{ job.services.postgres.ports['5432'] }}
-    - name: Upload coverage to Codecov  
+    - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v1
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         file: tests/coverage.xml
         flags: unittests
         name: codecov-umbrella
-        yml: ./codecov.yml 
+        yml: ./codecov.yml
         fail_ci_if_error: false

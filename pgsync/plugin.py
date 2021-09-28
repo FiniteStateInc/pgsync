@@ -102,7 +102,7 @@ class Plugins(object):
                     else:
                         doc["_source"] = dx
             except Exception as e:
-                logger.exeption("Plugin or data problem")
+                logger.exception("Plugin or data problem")
                 logger.warning(f"Continuing on skipping document: {doc}")
                 skip_doc = True
 

@@ -861,15 +861,19 @@ class Base(object):
 
     def fetchmany(self, statement, chunk_size=None):
         chunk_size = chunk_size or QUERY_CHUNK_SIZE
+        logger.debug(f"Chunk size: {chunk_size}")
         with self.__engine.connect() as conn:
+            logger.debug(f"Executing query...")
             result = conn.execution_options(stream_results=True).execute(
                 statement.select()
             )
+            logger.debug(f"Processing results...")
             for partition in result.partitions(chunk_size):
                 for keys, row, *primary_keys in partition:
                     yield keys, row, primary_keys
 
     def fetchcount(self, statement):
+        logger.debug(f"Fetching count...")
         with self.__engine.connect() as conn:
             return conn.execute(
                 statement.original.with_only_columns(

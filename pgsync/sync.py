@@ -963,7 +963,7 @@ class Sync(Base):
             except ClientError as e:
                 status = e.response["ResponseMetadata"]["HTTPStatusCode"]
                 if status == 404:
-                    logger.warning("checkpoint file not found in s3", e)
+                    logger.warning("checkpoint file not found in s3")
                 else:
                     logger.error("unable to download checkpoint file from s3", e)
                     raise

@@ -51,6 +51,7 @@ from .settings import (
     POLL_TIMEOUT,
     REDIS_POLL_INTERVAL,
     REPLICATION_SLOT_CLEANUP_INTERVAL,
+    INTERACTIVE_COUNTER
 )
 from .transform import get_private_keys, transform
 from .utils import get_config, show_settings, threaded, Timer
@@ -819,6 +820,7 @@ class Sync(Base):
 
         self.query_builder.isouter = True
 
+        logger.debug(f"Building query...")
         for node in traverse_post_order(root):
 
             try:
@@ -857,11 +859,20 @@ class Sync(Base):
                 logger.exception(f"Exception {e}")
                 raise
 
+        logger.debug(f"Query built. Compiling query...")
         if self.verbose:
             compiled_query(node._subquery, "Query")
 
+        logger.debug(f"Query compiled.")
+        logger.debug(f"Before work. Query: {node._subquery}")
+        if INTERACTIVE_COUNTER:
+            barlength = self.fetchcount(node._subquery)
+            logger.debug(f"Fetchcount is: {barlength}")
+        else:
+            logger.info(f"Interactive query is off")
+            barlength = 1
         with click.progressbar(
-            length=self.fetchcount(node._subquery),
+            length=barlength,
             show_pos=True,
             show_percent=True,
             show_eta=True,
@@ -869,11 +880,12 @@ class Sync(Base):
             empty_char="-",
             width=50,
         ) as bar:
-
+            logger.debug(f"Before fetchmany.")
             for i, (keys, row, primary_keys) in enumerate(
                 self.fetchmany(node._subquery)
             ):
-                bar.update(1)
+                if INTERACTIVE_COUNTER:
+                    bar.update(1)
 
                 row = transform(row, self.nodes)
                 row[META] = get_private_keys(keys)
@@ -951,7 +963,7 @@ class Sync(Base):
             except ClientError as e:
                 status = e.response["ResponseMetadata"]["HTTPStatusCode"]
                 if status == 404:
-                    logger.warning("checkpoint file not found in s3", e)
+                    logger.warning("checkpoint file not found in s3")
                 else:
                     logger.error("unable to download checkpoint file from s3", e)
                     raise

@@ -81,25 +81,30 @@ class Plugins(object):
         for doc in docs:
             skip_doc = False
 
-            for plugin in self.plugins:
-                logger.debug(f"Plugin: {plugin.name}")
+            try:
+                for plugin in self.plugins:
+                    logger.debug(f"Plugin: {plugin.name}")
 
-                dx = plugin.transform(
-                    doc["_source"],
-                    _id=doc["_id"],
-                    _index=doc["_index"],
-                    _fulldoc=doc,
-                )
+                    dx = plugin.transform(
+                        doc["_source"],
+                        _id=doc["_id"],
+                        _index=doc["_index"],
+                        _fulldoc=doc,
+                    )
 
-                if isinstance(dx, (typing.List, typing.Tuple)):
-                    for item in dx:
-                        docs.append(item)
-                    skip_doc = True
-                    break
-                elif dx is None:
-                    skip_doc = True
-                else:
-                    doc["_source"] = dx
+                    if isinstance(dx, (typing.List, typing.Tuple)):
+                        for item in dx:
+                            docs.append(item)
+                        skip_doc = True
+                        break
+                    elif dx is None:
+                        skip_doc = True
+                    else:
+                        doc["_source"] = dx
+            except Exception as e:
+                logger.exception("Plugin or data problem")
+                logger.warning(f"Continuing on skipping document: {doc}")
+                skip_doc = True
 
             if skip_doc:
                 continue

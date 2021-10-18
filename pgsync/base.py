@@ -862,7 +862,7 @@ class Base(object):
     def fetchmany(self, statement, chunk_size=None):
         chunk_size = chunk_size or QUERY_CHUNK_SIZE
         logger.debug(f"Chunk size: {chunk_size}")
-        with self.__engine.connect() as conn:
+        with self.__engine.begin() as conn:
             logger.debug(f"Executing query...")
             result = conn.execution_options(stream_results=True).execute(
                 statement.select()

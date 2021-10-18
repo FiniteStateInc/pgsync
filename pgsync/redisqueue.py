@@ -1,6 +1,7 @@
 """PGSync RedisQueue."""
 import json
 import logging
+import time
 
 from redis import Redis
 from redis.exceptions import ConnectionError
@@ -33,15 +34,17 @@ class RedisQueue(object):
 
     def qsize(self):
         """Return the approximate size of the queue."""
-        return self.__db.llen(self.key)
+        return self.__db.zcount(self.key,'-inf','+inf')
 
     def empty(self):
         """Return True if the queue is empty, False otherwise."""
         return self.qsize() == 0
 
-    def push(self, item):
+    def push(self, item, txn_id):
         """Push item into the queue."""
-        self.__db.rpush(self.key, json.dumps(item))
+        payload = json.dumps(item)
+        self.__db.zadd(self.key, {payload:txn_id}, nx=True)
+
 
     def pop(self, block=True, timeout=None):
         """Remove and return an item from the queue.
@@ -50,27 +53,35 @@ class RedisQueue(object):
         if necessary until an item is available.
         """
         if block:
-            item = self.__db.blpop(self.key, timeout=timeout)
+            item = self.__db.bzpopmin(self.key)
         else:
-            item = self.__db.lpop(self.key)
+            item = self.__db.zpopmin(self.key)
+
         if item:
-            item = item[1]
-        return json.loads(item)
+            payload = json.loads(item[1])
+            score = item[2]
+            return (score,payload)
+        else:
+            return None
 
     def bulk_pop(self, chunk_size=None):
         """Remove and return multiple items from the queue."""
         chunk_size = chunk_size or REDIS_CHUNK_SIZE
         items = []
-        while self.__db.llen(self.key) != 0:
+        while self.empty() == False:
             if len(items) > chunk_size:
                 break
-            item = self.__db.lpop(self.key)
-            items.append(json.loads(item))
+
+            # For now just use pop. I think there's a better, bulk way to do this in redis
+            items.append(self.pop())
         return items
 
     def bulk_push(self, items):
-        """Push multiple items onto the queue."""
-        self.__db.rpush(self.key, *map(json.dumps, items))
+        """Push multiple items onto the queue.
+        Takes an array of tuples. First element = txn_id, second = payload"""
+        for item in items:
+            self.push(item[1],item[0])
+        
 
     def pop_nowait(self):
         """Equivalent to pop(False)."""

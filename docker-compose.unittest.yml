@@ -11,7 +11,7 @@ services:
       - POSTGRES_DB=airbnb
   redis:
     image: redis
-    command: redis-server
+    command: redis-server --requirepass utpass
     ports:
       - "6379:6379"
   elasticsearch:
@@ -49,4 +49,4 @@ services:
       - ELASTICSEARCH_SCHEME=http
       - ELASTICSEARCH_HOST=elasticsearch
       - REDIS_HOST=redis
-      #- REDIS_AUTH=PLEASE_CHANGE_ME
+      - REDIS_AUTH=utpass

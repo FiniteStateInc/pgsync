@@ -7,7 +7,7 @@ from pgsync.utils import get_redis_url
 @pytest.mark.usefixtures("table_creator")
 class TestRedisQueue(object):
     """Redis Queue tests."""
-    redis_queue = RedisQueue(name="test",namespace="testns", password="PLEASE_CHANGE_ME")
+    redis_queue = RedisQueue(name="test",namespace="testns",password="utpass")
 
     redis_queue._delete()
 

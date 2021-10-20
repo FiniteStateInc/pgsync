@@ -49,4 +49,4 @@ services:
       - ELASTICSEARCH_SCHEME=http
       - ELASTICSEARCH_HOST=elasticsearch
       - REDIS_HOST=redis
-      #- REDIS_AUTH=PLEASE_CHANGE_ME
+      - REDIS_AUTH=utpass

@@ -110,15 +110,14 @@ Resources:
                       - Name: GitHub-Fetch
                         ActionTypeId:
                             Category: Source
-                            Owner: ThirdParty
-                            Provider: GitHub
+                            Owner: AWS
+                            Provider: CodeStarSourceConnection
                             Version: "1"
                         Configuration:
-                            Branch: !Join [ '', [ !FindInMap [environmentMap, "{{env}}", branch], "{{instance}}" ] ]
-                            OAuthToken: "{{ '{{resolve:secretsmanager:' + github_token_arn + '}}' }}"
-                            Owner: !Ref githubOrganizationName
-                            PollForSourceChanges: "false"
-                            Repo: !Ref githubRepoName
+                            ConnectionArn: "{{codestar_connection_arn}}"
+                            BranchName: !Join [ '', [ !FindInMap [environmentMap, "dev", branch], "" ] ]
+                            FullRepositoryId: !Join [ "/", [ !Ref "githubOrganizationName", !Ref "githubRepoName" ] ]
+                            OutputArtifactFormat: CODE_ZIP
                         OutputArtifacts:
                             - Name: SourceArtifact    
                         Namespace: SourceVariables
@@ -139,19 +138,6 @@ Resources:
                         OutputArtifacts:
                             - Name: BuildPGSyncBaseArtifact
 
-    WebHook:
-        Type: AWS::CodePipeline::Webhook
-        Properties:
-            Name: finite-state-pgsbase-{{env + instance}}
-            Authentication: GITHUB_HMAC
-            AuthenticationConfiguration:
-                SecretToken: "{{ '{{resolve:secretsmanager:' + github_token_arn + '}}' }}"
-            Filters:
-                - JsonPath: $.ref
-                  MatchEquals: refs/heads/{Branch}
-            RegisterWithThirdParty: "true"
-            TargetAction: GitHub-Fetch
-            TargetPipeline: !Ref Pipeline
-            TargetPipelineVersion: !GetAtt Pipeline.Version
+
 
 

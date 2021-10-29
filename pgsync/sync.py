@@ -1112,7 +1112,7 @@ class Sync(Base):
         # for truncate, tg_op txids is None so skip setting the checkpoint
         if txids != set([None]):
             txmin = min(min(txids), self.txid_current) - 1
-            self.checkpoint = txmin
+            self.checkpoint = int(txmin)
 
     def pull(self) -> None:
         """Pull data from db."""

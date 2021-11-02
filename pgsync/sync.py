@@ -1009,10 +1009,11 @@ class Sync(Base):
     def poll_redis(self) -> None:
         """Consumer which polls Redis continuously."""
         while True:
-            payloads = self.redis.bulk_pop()
-            if payloads:
+            payload_tuples = self.redis.bulk_pop()
+            if payload_tuples:
+                txn_ids, payloads = zip(*payload_tuples)
                 logger.debug(f"poll_redis: {payloads}")
-                self.on_publish(payloads)
+                self.on_publish(payloads, txn_ids)
             time.sleep(REDIS_POLL_INTERVAL)
 
     @threaded
@@ -1058,12 +1059,14 @@ class Sync(Base):
             while conn.notifies:
                 notification = conn.notifies.pop(0)
                 payload = json.loads(notification.payload)
-                self.redis.push(payload)
+                # Use the txn_id as the redis score
+                txn_id = payload.pop('xmin')
+                self.redis.push(payload, txn_id)
                 logger.debug(f"on_notify: {payload}")
                 j += 1
             i = 0
 
-    def on_publish(self, payloads: Dict) -> None:
+    def on_publish(self, payloads: Dict, txn_ids) -> None:
         """
         Redis publish event handler.
 
@@ -1105,11 +1108,11 @@ class Sync(Base):
                     self.sync(self._payloads(_payloads))
                     _payloads = []
 
-        txids = set(map(lambda x: x["xmin"], payloads))
+        txids = set(txn_ids)
         # for truncate, tg_op txids is None so skip setting the checkpoint
         if txids != set([None]):
             txmin = min(min(txids), self.txid_current) - 1
-            self.checkpoint = txmin
+            self.checkpoint = int(txmin)
 
     def pull(self) -> None:
         """Pull data from db."""

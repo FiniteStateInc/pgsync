@@ -51,7 +51,7 @@ from .settings import (
     POLL_TIMEOUT,
     REDIS_POLL_INTERVAL,
     REPLICATION_SLOT_CLEANUP_INTERVAL,
-    INTERACTIVE_COUNTER
+    INTERACTIVE_COUNTER,
 )
 from .transform import get_private_keys, transform
 from .utils import get_config, show_settings, threaded, Timer
@@ -140,9 +140,9 @@ class Sync(Base):
                     "usesuper",
                 )
                 or self.has_permission(
-                self.engine.url.username,
-                "userepl",
-            )
+                    self.engine.url.username,
+                    "userepl",
+                )
             ):
                 raise SuperUserError(
                     f'PG_USER "{self.engine.url.username}" needs to be '
@@ -280,39 +280,20 @@ class Sync(Base):
                 continue
             _rows.append(row)
 
+        # We now just dump this in the redis queue and let it process in the same manner
+        # as the "realtime" changes.  If it's a one-time load, we don't care about what's next. This
+        # has the advantage of letting the redis sorted-sets reduce a lot of the duplicate work.
         for i, row in enumerate(_rows):
-
             logger.debug(f"txid: {row.xid}")
             logger.debug(f"data: {row.data}")
-            # TODO: optimize this so we are not parsing the same row twice
             try:
                 payload = self.parse_logical_slot(row.data)
+                self.redis.push(payload, row.xid)
             except Exception as e:
                 logger.exception(
                     f"Error parsing row: {e}\nRow data: {row.data}"
                 )
                 raise
-            payloads.append(payload)
-
-            j = i + 1
-            if j < len(_rows):
-                try:
-                    payload2 = self.parse_logical_slot(_rows[j].data)
-                except Exception as e:
-                    logger.exception(
-                        f"Error parsing row: {e}\nRow data: {_rows[j].data}"
-                    )
-                    raise
-
-                if (
-                    payload["tg_op"] != payload2["tg_op"]
-                    or payload["table"] != payload2["table"]
-                ):
-                    self.sync(self._payloads(payloads))
-                    payloads = []
-            elif j == len(_rows):
-                self.sync(self._payloads(payloads))
-                payloads = []
 
         if rows:
             self.logical_slot_get_changes(
@@ -494,7 +475,9 @@ class Sync(Base):
                 # Deal with parent primary keys that match up with our foreign key. indicates parent needs to change
                 es_updated = False
                 if root.name not in fkeys_alltables.keys():
-                    logger.warning(f"Foreign keys not available for: {root.name}  node: {node}")
+                    logger.warning(
+                        f"Foreign keys not available for: {root.name}  node: {node}"
+                    )
                 else:
                     root_foreign_keys = fkeys_alltables[root.name]
                     for pkey in root.primary_keys:
@@ -504,15 +487,16 @@ class Sync(Base):
                                 # If payload old fkey == payload new fkey we can optimize. For now, we hit es for
                                 # context as we don't know if they are different or not. Additionally, the "OR" optimization
                                 # below is probably not necessary since this will just be a handful of items.
-                                _filters = _filters + self._update_using_es(payload, root, node, fields)
+                                _filters = _filters + self._update_using_es(
+                                    payload, root, node, fields
+                                )
                                 es_updated = True
-
 
                     if not es_updated:
                         for key, value in primary_fields.items():
                             for fkey in root_foreign_keys:
                                 where = {fkey: value}
-                                _filters.append(where);
+                                _filters.append(where)
                             if None in payload["new"].values():
                                 extra["table"] = node.table
                                 extra["column"] = key
@@ -526,7 +510,9 @@ class Sync(Base):
         _es_based_filters = []
         for doc_id in self.es._search(self.index, node.table, fields):
             params = doc_id.split(PRIMARY_KEY_DELIMITER)
-            where = {key: params[i] for i, key in enumerate(root.model.primary_keys)}
+            where = {
+                key: params[i] for i, key in enumerate(root.model.primary_keys)
+            }
             _es_based_filters.append(where)
 
         # also handle foreign_keys
@@ -537,8 +523,7 @@ class Sync(Base):
                 node,
             )
             foreign_values = [
-                payload.get("new", {}).get(k)
-                for k in foreign_keys[node.name]
+                payload.get("new", {}).get(k) for k in foreign_keys[node.name]
             ]
 
             for key in [key.name for key in node.primary_keys]:
@@ -553,7 +538,10 @@ class Sync(Base):
                 fields,
             ):
                 params = doc_id.split(PRIMARY_KEY_DELIMITER)
-                where = {key: params[i] for i, key in enumerate(root.model.primary_keys)}
+                where = {
+                    key: params[i]
+                    for i, key in enumerate(root.model.primary_keys)
+                }
                 _es_based_filters.append(where)
 
             return _es_based_filters
@@ -783,7 +771,9 @@ class Sync(Base):
                             .data(
                                 [
                                     (
-                                        self.getattr_withlog(column, node, value),
+                                        self.getattr_withlog(
+                                            column, node, value
+                                        ),
                                     )
                                     for value in values
                                 ]
@@ -803,7 +793,9 @@ class Sync(Base):
             else:
                 return stype.python_type(value)
         except Exception:
-            logger.error(f"column: {column}  node: {node}  value: {value}  node model c: {node.model.c}")
+            logger.error(
+                f"column: {column}  node: {node}  value: {value}  node model c: {node.model.c}"
+            )
             raise
 
     def _sync(
@@ -954,18 +946,25 @@ class Sync(Base):
         env = Env()
         env.read_env()
         use_s3 = env.bool("CHECKPOINT_FILE_IN_S3", default=False)
-        s3_bucket = env.str("CHECKPOINT_FILE_S3_BUCKET", default="finitestate-firmware-env-pgsync")
+        s3_bucket = env.str(
+            "CHECKPOINT_FILE_S3_BUCKET",
+            default="finitestate-firmware-env-pgsync",
+        )
         if use_s3 and not self.checkpoint_to_s3_error:
             try:
-                s3_client = boto3.client('s3')
-                s3_client.download_file(s3_bucket, self._checkpoint_file, self._checkpoint_file)
+                s3_client = boto3.client("s3")
+                s3_client.download_file(
+                    s3_bucket, self._checkpoint_file, self._checkpoint_file
+                )
                 self.checkpoint_from_s3 = True
             except ClientError as e:
                 status = e.response["ResponseMetadata"]["HTTPStatusCode"]
                 if status == 404:
                     logger.warning("checkpoint file not found in s3")
                 else:
-                    logger.error("unable to download checkpoint file from s3", e)
+                    logger.error(
+                        "unable to download checkpoint file from s3", e
+                    )
                     raise
         else:
             self.checkpoint_from_s3 = False
@@ -986,14 +985,19 @@ class Sync(Base):
         env = Env()
         env.read_env()
         use_s3 = env.bool("CHECKPOINT_FILE_IN_S3", default=False)
-        s3_bucket = env.str("CHECKPOINT_FILE_S3_BUCKET", default="finitestate-firmware-env-pgsync-unittest")
+        s3_bucket = env.str(
+            "CHECKPOINT_FILE_S3_BUCKET",
+            default="finitestate-firmware-env-pgsync-unittest",
+        )
         if use_s3:
             try:
-                s3_client = boto3.resource('s3')
-                s3_obj =s3_client.Object(s3_bucket, self._checkpoint_file)
+                s3_client = boto3.resource("s3")
+                s3_obj = s3_client.Object(s3_bucket, self._checkpoint_file)
                 s3_obj.put(Body=str(value))
                 # s3_client.upload_file(self._checkpoint_file, s3_bucket, self._checkpoint_file)
-                logger.info(f"successfully uploaded checkpoint file {self._checkpoint_file} to {s3_bucket}")
+                logger.info(
+                    f"successfully uploaded checkpoint file {self._checkpoint_file} to {s3_bucket}"
+                )
             except ClientError as e:
                 logger.error("unable to upload checkpoint file to s3", e)
                 self.checkpoint_to_s3_error = True
@@ -1060,7 +1064,7 @@ class Sync(Base):
                 notification = conn.notifies.pop(0)
                 payload = json.loads(notification.payload)
                 # Use the txn_id as the redis score
-                txn_id = payload.pop('xmin')
+                txn_id = payload.pop("xmin")
                 self.redis.push(payload, txn_id)
                 logger.debug(f"on_notify: {payload}")
                 j += 1

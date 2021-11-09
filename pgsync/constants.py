@@ -45,7 +45,6 @@ RELATIONSHIP_FOREIGN_KEYS = [
     "parent",
 ]
 
-
 # tg_op
 UPDATE = "UPDATE"
 INSERT = "INSERT"
@@ -179,5 +178,5 @@ LOGICAL_SLOT_PREFIX = re.compile(
     r"table\s\"?(?P<schema>[\w-]+)\"?.\"?(?P<table>[\w-]+)\"?:\s(?P<tg_op>[A-Z]+):"
 )
 LOGICAL_SLOT_SUFFIX = re.compile(
-    '\s(?P<key>"?\w+"?)\[(?P<type>[\w\s]+)\]:(?P<value>[\w\'"\-]+)'
+    r'\s(?P<key>"?\w+"?)\[(?P<type>[\w\s]+)\]:(?P<value>[\w\'"\-]+)'
 )

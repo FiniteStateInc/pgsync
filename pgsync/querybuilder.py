@@ -10,18 +10,11 @@ from .node import node_from_table
 class QueryBuilder(object):
     """Query builder."""
 
-    def __init__(self, base, verbose=False):
-        """
-        Query builder constructor.
-
-        :param base: base class
-        :type base: `base.class`
-        :param verbose: verbose
-        :type verbose: `bool`
-        """
-        self.base = base
-        self.verbose = verbose
-        self.isouter = True
+    def __init__(self, base: Base, verbose: bool = False):
+        """Query builder constructor."""
+        self.base: Base = base
+        self.verbose: bool = verbose
+        self.isouter: bool = True
 
     def _get_foreign_keys(self, node_a, node_b):
         if (

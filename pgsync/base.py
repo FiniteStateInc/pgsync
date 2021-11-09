@@ -40,7 +40,6 @@ try:
 except ImportError:
     pass
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -81,27 +80,23 @@ class Base(object):
     def has_permission(self, username: str, permission: str) -> bool:
         """Check if the given user is a superuser or replication user.
 
-        Args:
-            username (str): The username to check
-            permission (str): The permission to check
-
-        Returns:
-            True if successful, False otherwise.
-
-        """
-        if permission not in ("usecreatedb", "usesuper", "userepl"):
-            raise RuntimeError(f"Invalid user permission {permission}")
-
-        try:
-            return self.fetchone(
-                sa.select([sa.column(permission)])
-                .select_from(sa.text("pg_user"))
-                .where(
-                    sa.and_(
-                        *[
-                            sa.column("usename") == username,
-                            sa.column(permission) == True,  # noqa
-                        ]
+        with self.__engine.connect() as conn:
+            return (
+                conn.execute(
+                    sa.select([sa.column("usename")])
+                    .select_from(sa.text("pg_user"))
+                    .where(
+                        sa.and_(
+                            *[
+                                sa.column("usename") == username,
+                                sa.or_(
+                                    *[
+                                        (sa.column(permission) is True)
+                                        for permission in permissions
+                                    ]
+                                ),
+                            ]
+                        )
                     )
                 ),
                 label="has_permission",
@@ -135,7 +130,12 @@ class Base(object):
                 )
             model = metadata.tables[name]
             model.append_column(sa.Column("xmin", sa.BigInteger))
-            model.append_column(sa.Column("oid", sa.dialects.postgresql.OID))
+            # support SQLQlchemy/Postgres 14 which somehow now reflects
+            # the oid column
+            if "oid" not in [column.name for column in model.columns]:
+                model.append_column(
+                    sa.Column("oid", sa.dialects.postgresql.OID)
+                )
             model = model.alias()
             setattr(
                 model,
@@ -906,8 +906,7 @@ def subtransactions(session):
 
 
 def _get_foreign_keys(model_a, model_b):
-
-    foreign_keys = collections.defaultdict(list)
+    foreign_keys = defaultdict(list)
 
     if model_a.foreign_keys:
 

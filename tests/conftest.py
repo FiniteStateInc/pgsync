@@ -9,7 +9,6 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.schema import UniqueConstraint
 
 from pgsync.base import Base, create_database, drop_database
-from pgsync.constants import SCHEMA
 from pgsync.sync import Sync
 from pgsync.utils import get_postgres_url
 
@@ -332,10 +331,6 @@ def table_creator(base, connection, model_mapping):
     sa.orm.configure_mappers()
     base.metadata.create_all(connection)
     pg_base = Base(connection.engine.url.database)
-    pg_base.create_triggers(
-        connection.engine.url.database,
-        SCHEMA,
-    )
     pg_base.drop_replication_slot(f"{connection.engine.url.database}_testdb")
     pg_base.create_replication_slot(f"{connection.engine.url.database}_testdb")
     yield

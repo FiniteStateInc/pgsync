@@ -194,7 +194,6 @@ class ElasticHelper(object):
 
     def _build_mapping(self, root, routing):
         """Get the Elasticsearch mapping from the schema transform."""
-
         for node in traverse_post_order(root):
 
             rename = node.transform.get("rename", {})

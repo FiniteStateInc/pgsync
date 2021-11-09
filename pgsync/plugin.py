@@ -36,10 +36,10 @@ class Plugins(object):
         self.plugins = sorted(self.plugins, key=lambda plugin: self.names.index(plugin.name))
         logger.info(f"plugins will run in this order: {list(map(lambda plugin: plugin.name, self.plugins))}")
 
-    def walk(self, package):
-        """Recursively walk the supplied package and fetch all plugins"""
-        plugins = importlib.import_module(package)
-        for _, name, ispkg in pkgutil.iter_modules(
+    def walk(self, package: str) -> None:
+        """Recursively walk the supplied package and fetch all plugins."""
+        plugins = import_module(package)
+        for _, name, ispkg in iter_modules(
             plugins.__path__,
             f"{plugins.__name__}.",
         ):

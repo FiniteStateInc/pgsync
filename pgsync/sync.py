@@ -8,15 +8,13 @@ import os
 from os import path
 import pprint
 import re
-import select
 import sys
 import time
 from datetime import datetime, timedelta
 from botocore.exceptions import ClientError
-from typing import Dict, Generator, List, Optional
+from typing import Generator, List, Optional, Set
 
 import click
-import psycopg2
 import sqlalchemy as sa
 from sqlalchemy import cast, String
 from sqlalchemy.dialects import postgresql
@@ -49,6 +47,7 @@ from .querybuilder import QueryBuilder
 from .redisqueue import RedisQueue
 from .settings import (
     POLL_TIMEOUT,
+    CHECKPOINT_PATH,
     REDIS_POLL_INTERVAL,
     REPLICATION_SLOT_CLEANUP_INTERVAL,
     INTERACTIVE_COUNTER,
@@ -102,7 +101,6 @@ class Sync(Base):
 
     def validate(self, repl_slots: Optional[bool] = True):
         """Perform all validation right away."""
-
         # ensure v2 compatible schema
         if not isinstance(self.nodes, dict):
             raise SchemaError(
@@ -206,13 +204,11 @@ class Sync(Base):
                     user_defined_fkey_tables.setdefault(node.table, set([]))
                     user_defined_fkey_tables[node.table] |= set(columns)
             if tables:
-                self.create_triggers(schema, tables=tables)
                 self.create_view(schema, tables, user_defined_fkey_tables)
         self.create_replication_slot(self.__name)
 
     def teardown(self, drop_view: Optional[bool] = True) -> None:
         """Drop the database triggers and replication slot."""
-
         try:
             os.unlink(self._checkpoint_file)
         except OSError:
@@ -224,7 +220,6 @@ class Sync(Base):
             for node in traverse_breadth_first(root):
                 tables |= set(node.relationship.through_tables)
                 tables |= set([node.table])
-            self.drop_triggers(schema=schema, tables=tables)
             if drop_view:
                 self.drop_view(schema=schema)
         self.drop_replication_slot(self.__name)
@@ -238,7 +233,10 @@ class Sync(Base):
         return f"{PRIMARY_KEY_DELIMITER}".join(map(str, primary_keys))
 
     def logical_slot_changes(
-        self, txmin: Optional[int] = None, txmax: Optional[int] = None
+        self,
+        txmin: Optional[int] = None,
+        txmax: Optional[int] = None,
+        upto_nchanges: Optional[int] = None,
     ) -> None:
         """
         Process changes from the db logical replication logs.
@@ -267,12 +265,11 @@ class Sync(Base):
             self.__name,
             txmin=txmin,
             txmax=txmax,
-            upto_nchanges=None,
+            upto_nchanges=upto_nchanges,
         )
 
-        rows = rows or []
-        payloads = []
-        _rows = []
+        rows: list = rows or []
+        _rows: list = []
 
         for row in rows:
             if re.search(r"^BEGIN", row.data) or re.search(
@@ -1078,9 +1075,7 @@ class Sync(Base):
                 yield doc
 
     def sync(self, docs: Generator) -> None:
-        """
-        Pull sync data from generator to Elasticsearch.
-        """
+        """Pull sync data from generator to Elasticsearch."""
         try:
             self.es.bulk(self.index, docs)
         except Exception as e:
@@ -1171,55 +1166,11 @@ class Sync(Base):
 
     @threaded
     def poll_db(self) -> None:
-        """
-        Producer which polls Postgres continuously.
-
-        Receive a notification message from the channel we are listening on
-        """
-        conn = self.engine.connect().connection
-        conn.set_isolation_level(
-            psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT
-        )
-        cursor = conn.cursor()
-        channel = self.database
-        cursor.execute(f'LISTEN "{channel}"')
-        logger.debug(f'Listening for notifications on channel "{channel}"')
-
-        i = 0
-        j = 0
-
-        # Every 10th timeout display a message. Every minute with defaults
-        diagnostic_message_interval = 60
-        if logger.isEnabledFor(logging.DEBUG):
-            # Bump up the interval to every second.
-            diagnostic_message_interval = 10
-
+        """Producer which polls Postgres continuously."""
         while True:
-            # NB: consider reducing POLL_TIMEOUT to increase throughout
-            if select.select([conn], [], [], POLL_TIMEOUT) == ([], [], []):
-                if i % diagnostic_message_interval == 0:
-                    sys.stdout.write(f"Polling db {channel}: {j:,} item(s)\n")
-                    sys.stdout.flush()
-                i += 1
-                continue
+            self.logical_slot_changes(upto_nchanges=1000)
 
-            try:
-                conn.poll()
-            except psycopg2.OperationalError as e:
-                logger.fatal(f"OperationalError: {e}")
-                os._exit(-1)
-
-            while conn.notifies:
-                notification = conn.notifies.pop(0)
-                payload = json.loads(notification.payload)
-                # Use the txn_id as the redis score
-                txn_id = payload.pop("xmin")
-                self.redis.push(payload, txn_id)
-                logger.debug(f"on_notify: {payload}")
-                j += 1
-            i = 0
-
-    def on_publish(self, payloads: Dict, txn_ids) -> None:
+    def on_publish(self, payloads: list, txn_ids) -> None:
         """
         Redis publish event handler.
 
@@ -1378,9 +1329,7 @@ def main(
     verbose,
     version,
 ):
-    """
-    main application syncer
-    """
+    """Main application syncer"""
     if version:
         sys.stdout.write(f"Version: {__version__}\n")
         return

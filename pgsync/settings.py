@@ -104,11 +104,9 @@ REDIS_POLL_INTERVAL = env.float("REDIS_POLL_INTERVAL", default=0.01)
 
 
 # Logging:
-def get_logging_config(silent_loggers=None):
-    """
-    Return the python logging configuration based on environment variables.
-    """
-    logging_config = {
+def _get_logging_config(silent_loggers: Optional[str] = None):
+    """Return the python logging configuration based on environment variables."""
+    logging_config: dict = {
         "version": 1,
         "disable_existing_loggers": False,
         "formatters": {

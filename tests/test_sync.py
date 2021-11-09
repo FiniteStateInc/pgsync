@@ -54,12 +54,16 @@ class TestSync(object):
                 "pgsync.sync.Sync.logical_slot_get_changes"
             ) as mock_get:
                 with patch("pgsync.sync.Sync.sync") as mock_sync:
-                    sync.logical_slot_changes()
-                    mock_peek.assert_called_once_with(
-                        "testdb_testdb",
-                        txmin=None,
-                        txmax=None,
-                        upto_nchanges=None,
-                    )
-                    mock_get.assert_called_once()
-                    mock_sync.assert_called_once()
+                    with patch(
+                        "pgsync.redisqueue.RedisQueue.push"
+                    ) as mock_redis_push:
+                        sync.logical_slot_changes()
+                        mock_peek.assert_called_once_with(
+                            "testdb_testdb",
+                            txmin=None,
+                            txmax=None,
+                            upto_nchanges=None,
+                        )
+                        mock_get.assert_called_once()
+                        mock_sync.assert_not_called()
+                        mock_redis_push.assert_called_once()

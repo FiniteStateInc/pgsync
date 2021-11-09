@@ -440,6 +440,11 @@ class TestRoot(object):
             sync.logical_slot_changes(txmin=txmin, txmax=txmax)
 
         def poll_redis():
+            payload_tuples = sync.redis.bulk_pop()
+            if payload_tuples:
+                txn_ids, payloads = zip(*payload_tuples)
+                sync.on_publish(payloads, txn_ids)
+
             return []
 
         def poll_db():
@@ -578,6 +583,11 @@ class TestRoot(object):
             sync.logical_slot_changes(txmin=txmin, txmax=txmax)
 
         def poll_redis():
+            payload_tuples = sync.redis.bulk_pop()
+            if payload_tuples:
+                txn_ids, payloads = zip(*payload_tuples)
+                sync.on_publish(payloads, txn_ids)
+
             return []
 
         def poll_db():
@@ -632,6 +642,11 @@ class TestRoot(object):
             sync.logical_slot_changes(txmin=txmin, txmax=txmax)
 
         def poll_redis():
+            payload_tuples = sync.redis.bulk_pop()
+            if payload_tuples:
+                txn_ids, payloads = zip(*payload_tuples)
+                sync.on_publish(payloads, txn_ids)
+
             return []
 
         def poll_db():

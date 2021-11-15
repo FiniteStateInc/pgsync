@@ -147,8 +147,15 @@ class QueryBuilder(object):
         if self.from_obj is not None:
             node._subquery = node._subquery.select_from(self.from_obj)
 
+        if node._limit is not None:
+            node._subquery = node._subquery.limit(node._limit)
+        if node._offset is not None:
+            node._subquery = node._subquery.offset(node._offset)
         if node._filters:
             node._subquery = node._subquery.where(sa.and_(*node._filters))
+        if node._order_by is not None:
+            node._subquery = node._subquery.order_by(node._order_by)
+
         node._subquery = node._subquery.alias()
 
     def _children(self, node):

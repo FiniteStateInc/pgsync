@@ -167,6 +167,9 @@ class Node(object):
         self.relationship = Relationship(kwargs.get("relationship"))
         self._subquery = None
         self._filters = []
+        self._order_by = None
+        self._limit = None
+        self._offset = None
         self._mapping = {}
 
     def __str__(self):

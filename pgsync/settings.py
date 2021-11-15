@@ -21,7 +21,12 @@ REPLICATION_SLOT_CLEANUP_INTERVAL = env.float(
     "REPLICATION_SLOT_CLEANUP_INTERVAL",
     default=180.0,
 )
-INTERACTIVE_COUNTER = env.bool("INTERACTIVE_COUNTER",default=False)
+# Divids the initial pull(..) query up into X divisions. Helps break
+# up the work to avoid large joins on the server
+INITIAL_PULL_ROWS_PER_SEGMENT = env.int(
+    "INITIAL_PULL_ROWS_PER_SEGMENT", default=100000
+)
+INTERACTIVE_COUNTER = env.bool("INTERACTIVE_COUNTER", default=False)
 
 # Elasticsearch:
 ELASTICSEARCH_SCHEME = env.str("ELASTICSEARCH_SCHEME", default="http")

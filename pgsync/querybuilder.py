@@ -149,6 +149,9 @@ class QueryBuilder(object):
 
         if node._filters:
             node._subquery = node._subquery.where(sa.and_(*node._filters))
+        if node._order_by:
+            node._subquery = node._subquery.order_by(*node._order_by)
+
         node._subquery = node._subquery.alias()
 
     def _children(self, node):

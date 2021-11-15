@@ -52,6 +52,7 @@ from .settings import (
     REDIS_POLL_INTERVAL,
     REPLICATION_SLOT_CLEANUP_INTERVAL,
     INTERACTIVE_COUNTER,
+    INITIAL_PULL_ROWS_PER_SEGMENT,
 )
 from .transform import get_private_keys, transform
 from .utils import get_config, show_settings, threaded, Timer
@@ -804,6 +805,8 @@ class Sync(Base):
         txmin: Optional[int] = None,
         txmax: Optional[int] = None,
         extra: Optional[Dict] = None,
+        # offset: Optional[int] = None,
+        # limit: Optional[int] = None,
     ) -> Generator:
         if filters is None:
             filters = {}
@@ -851,82 +854,111 @@ class Sync(Base):
                 logger.exception(f"Exception {e}")
                 raise
 
-        logger.debug(f"Query built. Compiling query...")
-        if self.verbose:
-            compiled_query(node._subquery, "Query")
+        logger.debug(f"Applying partitioning limit and offset")
+        logger.debug(f"Retrieving count for root table (limit and offset restriction)")
 
-        logger.debug(f"Query compiled.")
-        logger.debug(f"Before work. Query: {node._subquery}")
-        if INTERACTIVE_COUNTER:
-            barlength = self.fetchcount(node._subquery)
-            logger.debug(f"Fetchcount is: {barlength}")
-        else:
-            logger.info(f"Interactive query is off")
-            barlength = 1
-        with click.progressbar(
-            length=barlength,
-            show_pos=True,
-            show_percent=True,
-            show_eta=True,
-            fill_char="=",
-            empty_char="-",
-            width=50,
-        ) as bar:
-            logger.debug(f"Before fetchmany.")
-            for i, (keys, row, primary_keys) in enumerate(
-                self.fetchmany(node._subquery)
-            ):
-                if INTERACTIVE_COUNTER:
-                    bar.update(1)
+        session = self.session
 
-                row = transform(row, self.nodes)
-                row[META] = get_private_keys(keys)
-                if extra:
-                    if extra["table"] not in row[META]:
-                        row[META][extra["table"]] = {}
-                    if extra["column"] not in row[META][extra["table"]]:
-                        row[META][extra["table"]][extra["column"]] = []
-                    row[META][extra["table"]][extra["column"]].append(0)
+        primary_query = session.query(sa.func.COUNT()).select_from(node.model)
+        row_count_for_partitioning = session.execute(primary_query).scalar()
+        session.commit()
 
-                if self.verbose:
-                    print(f"{(i + 1)})")
-                    print(f"Pkeys: {primary_keys}")
-                    pprint.pprint(row)
-                    print("-" * 10)
+        logger.debug(f"Number of rows for partitioning: {row_count_for_partitioning}")
 
-                doc = {
-                    "_id": self.get_doc_id(primary_keys),
-                    "_index": self.index,
-                    "_source": row,
-                }
+        offset = 0
+        if row_count_for_partitioning > INITIAL_PULL_ROWS_PER_SEGMENT:
+            limit = INITIAL_PULL_ROWS_PER_SEGMENT
+            offset = 0
+            node._order_by.append(node.model.primary_keys)
+            node._limit = limit
+            node._offset = offset
+            logger.debug(
+                f"Added primary_keys: {node.model.primary_keys}"
+            )
 
-                if self.routing:
-                    doc["_routing"] = row[self.routing]
+        all_partitions = False
+        while not all_partitions:
+            logger.debug(f"Query built. Compiling query...")
+            if self.verbose:
+                compiled_query(node._subquery, "Query")
 
-                if self.es.version[0] < 7:
-                    doc["_type"] = "_doc"
+            logger.debug(f"Query compiled.")
+            logger.debug(f"Before work. Query: {node._subquery}")
 
-                plugin_output_n = 0
+            if INTERACTIVE_COUNTER:
+                barlength = self.fetchcount(node._subquery)
+                logger.debug(f"Fetchcount is: {barlength}")
+            else:
+                logger.info(f"Interactive query is off")
+                barlength = 1
+            with click.progressbar(
+                length=barlength,
+                show_pos=True,
+                show_percent=True,
+                show_eta=True,
+                fill_char="=",
+                empty_char="-",
+                width=50,
+            ) as bar:
+                logger.debug(f"Before fetchmany.")
+                for i, (keys, row, primary_keys) in enumerate(
+                    self.fetchmany(node._subquery)
+                ):
+                    if INTERACTIVE_COUNTER:
+                        bar.update(1)
 
-                if self._plugins:
-                    xs = self._plugins.transform([doc])
+                    row = transform(row, self.nodes)
+                    row[META] = get_private_keys(keys)
+                    if extra:
+                        if extra["table"] not in row[META]:
+                            row[META][extra["table"]] = {}
+                        if extra["column"] not in row[META][extra["table"]]:
+                            row[META][extra["table"]][extra["column"]] = []
+                        row[META][extra["table"]][extra["column"]].append(0)
 
-                    while x := next(xs, None):
-                        if self.pipeline:
-                            x["pipeline"] = self.pipeline
+                    if self.verbose:
+                        print(f"{(i + 1)})")
+                        print(f"Pkeys: {primary_keys}")
+                        pprint.pprint(row)
+                        print("-" * 10)
 
-                        plugin_output_n += 1
+                    doc = {
+                        "_id": self.get_doc_id(primary_keys),
+                        "_index": self.index,
+                        "_source": row,
+                    }
 
-                        yield {**doc, **x}
+                    if self.routing:
+                        doc["_routing"] = row[self.routing]
 
-                # skip record when plugin has returned multiple records
-                if plugin_output_n > 1:
-                    continue
+                    if self.es.version[0] < 7:
+                        doc["_type"] = "_doc"
 
-                if self.pipeline:
-                    doc["pipeline"] = self.pipeline
+                    plugin_output_n = 0
 
-                yield doc
+                    if self._plugins:
+                        xs = self._plugins.transform([doc])
+
+                        while x := next(xs, None):
+                            if self.pipeline:
+                                x["pipeline"] = self.pipeline
+
+                            plugin_output_n += 1
+
+                            yield {**doc, **x}
+
+                    # skip record when plugin has returned multiple records
+                    if plugin_output_n > 1:
+                        continue
+
+                    if self.pipeline:
+                        doc["pipeline"] = self.pipeline
+
+                    yield doc
+            offset = offset + INITIAL_PULL_ROWS_PER_SEGMENT
+            if offset > row_count_for_partitioning:
+                all_partitions = True
+
 
     def sync(self, docs: Generator) -> None:
         """
@@ -1126,7 +1158,6 @@ class Sync(Base):
         # forward pass sync
         self.sync(self._sync(txmin=txmin, txmax=txmax))
         self.checkpoint = txmax or self.txid_current
-        # now sync up to txmax to capture everything we may have missed
         self.logical_slot_changes(txmin=txmin, txmax=txmax)
         self._truncate = True
 

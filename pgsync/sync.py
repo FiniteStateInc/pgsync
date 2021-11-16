@@ -877,6 +877,10 @@ class Sync(Base):
             )
 
         all_partitions = False
+
+
+        ## TODO: this is not right... The above needs to modify query builder _subquery pieces for the partitioning.
+        ## TODO: Get this right
         while not all_partitions:
             logger.debug(f"Query built. Compiling query...")
             if self.verbose:

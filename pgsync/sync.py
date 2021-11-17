@@ -1279,7 +1279,7 @@ class Sync(Base):
         # now sync up to txmax to capture everything we may have missed
         logger.info(f"Grabbing slot changes")
         self.logical_slot_changes(txmin=txmin, txmax=txmax)
-        logger.(f"Slot change read complete.")
+        logger.info(f"Slot change read complete.")
         self._truncate = True
 
     @threaded

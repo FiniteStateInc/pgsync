@@ -817,7 +817,7 @@ class Sync(Base):
         offset = partition_context['offset']
         self.query_builder.isouter = True
 
-        logger.debug(f"Number of rows for partitioning: {row_count_for_partitioning}")
+        logger.info(f"Number of rows for partitioning: {row_count_for_partitioning}")
 
         logger.debug(f"Building query...")
 
@@ -828,7 +828,7 @@ class Sync(Base):
                 self._apply_tx_filters(node, txmax, txmin)
                 if row_count_for_partitioning > INITIAL_PULL_ROWS_PER_SEGMENT and node == root:
                     logger.debug(f"Applying partitioning limit and offset")
-                    logger.debug(f"Offset/limit: {node._offset}/{node._limit}")
+                    logger.info(f"Offset/limit: {node._offset}/{node._limit}")
                     node._order_by = sa.asc(node.model.primary_keys[0])
                     logger.debug(f"Order_by: {node._order_by}")
                     node._limit = INITIAL_PULL_ROWS_PER_SEGMENT
@@ -849,8 +849,7 @@ class Sync(Base):
 
         logger.debug(f"Query compiled.")
         logger.debug(f"Before work. Query: {node._subquery}")
-
-        logger.debug(f"Before fetchmany. Offset={node._offset}")
+        logger.info(f"Before fetchmany. Offset={node._offset}")
         for i, (keys, row, primary_keys) in enumerate(
             self.fetchmany(node._subquery)
         ):
@@ -1272,12 +1271,15 @@ class Sync(Base):
         """Pull data from db."""
         txmin = self.checkpoint
         txmax = self.txid_current
-        logger.debug(f"pull txmin: {txmin} txmax: {txmax}")
+        logger.info(f"pull txmin: {txmin} txmax: {txmax}")
         # forward pass sync
         self.sync_all_partitions()
+        logger.info(f"Initial pull complete.")
         self.checkpoint = txmax or self.txid_current
         # now sync up to txmax to capture everything we may have missed
+        logger.info(f"Grabbing slot changes")
         self.logical_slot_changes(txmin=txmin, txmax=txmax)
+        logger.(f"Slot change read complete.")
         self._truncate = True
 
     @threaded

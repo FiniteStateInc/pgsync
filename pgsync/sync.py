@@ -52,6 +52,7 @@ from .settings import (
     REDIS_POLL_INTERVAL,
     REPLICATION_SLOT_CLEANUP_INTERVAL,
     INTERACTIVE_COUNTER,
+    INITIAL_PULL_ROWS_PER_SEGMENT,
 )
 from .transform import get_private_keys, transform
 from .utils import get_config, show_settings, threaded, Timer
@@ -798,6 +799,155 @@ class Sync(Base):
             )
             raise
 
+    def _get_row_count(self, node):
+        session = self.session
+        primary_query = session.query(sa.func.COUNT()).select_from(node.model)
+        row_count = session.execute(primary_query).scalar()
+        session.commit()
+        return row_count
+
+    def _partition_docs(
+        self,
+        partition_context,
+        txmin: Optional[int] = None,
+        txmax: Optional[int] = None,
+    ) -> Generator:
+        root = self.tree.build(self.nodes)
+        row_count_for_partitioning = partition_context['row_count_for_partitioning']
+        offset = partition_context['offset']
+        self.query_builder.isouter = True
+
+        logger.debug(f"Number of rows for partitioning: {row_count_for_partitioning}")
+
+        logger.debug(f"Building query...")
+
+        filters = {}
+        for node in traverse_post_order(root):
+            try:
+                self._build_filters(filters, node)
+                self._apply_tx_filters(node, txmax, txmin)
+                if row_count_for_partitioning > INITIAL_PULL_ROWS_PER_SEGMENT and node == root:
+                    logger.debug(f"Applying partitioning limit and offset")
+                    logger.debug(f"Offset/limit: {node._offset}/{node._limit}")
+                    node._order_by = sa.asc(node.model.primary_keys[0])
+                    logger.debug(f"Order_by: {node._order_by}")
+                    node._limit = INITIAL_PULL_ROWS_PER_SEGMENT
+                    node._offset = offset
+                    logger.debug(f"Added primary_keys: {node.model.primary_key}")
+            except Exception as e:
+                logger.error(f"Filter building problem: {filters}")
+                logger.exception(f"Exception: {e}")
+
+            try:
+                self.query_builder.build_queries(node)
+            except Exception as e:
+                logger.exception(f"Exception {e}")
+                raise
+
+        if self.verbose:
+            compiled_query(node._subquery, "Query")
+
+        logger.debug(f"Query compiled.")
+        logger.debug(f"Before work. Query: {node._subquery}")
+
+        logger.debug(f"Before fetchmany. Offset={node._offset}")
+        for i, (keys, row, primary_keys) in enumerate(
+            self.fetchmany(node._subquery)
+        ):
+            row = transform(row, self.nodes)
+            row[META] = get_private_keys(keys)
+
+            if self.verbose:
+                print(f"{(i + 1)})")
+                print(f"Pkeys: {primary_keys}")
+                pprint.pprint(row)
+                print("-" * 10)
+
+            doc = {
+                "_id": self.get_doc_id(primary_keys),
+                "_index": self.index,
+                "_source": row,
+            }
+
+            if self.routing:
+                doc["_routing"] = row[self.routing]
+
+            if self.es.version[0] < 7:
+                doc["_type"] = "_doc"
+
+            plugin_output_n = 0
+
+            if self._plugins:
+                xs = self._plugins.transform([doc])
+
+                while x := next(xs, None):
+                    if self.pipeline:
+                        x["pipeline"] = self.pipeline
+
+                    plugin_output_n += 1
+
+                    yield {**doc, **x}
+
+            # skip record when plugin has returned multiple records
+            if plugin_output_n > 1:
+                continue
+
+            if self.pipeline:
+                doc["pipeline"] = self.pipeline
+
+            yield doc
+
+
+    def _apply_tx_filters(self, node, txmax, txmin):
+        if node.is_root:
+            if txmin:
+                node._filters.append(
+                    sa.cast(
+                        sa.cast(
+                            node.model.c.xmin,
+                            sa.Text,
+                        ),
+                        sa.BigInteger,
+                    )
+                    >= txmin
+                )
+            if txmax:
+                node._filters.append(
+                    sa.cast(
+                        sa.cast(
+                            node.model.c.xmin,
+                            sa.Text,
+                        ),
+                        sa.BigInteger,
+                    )
+                    < txmax
+                )
+
+    def sync_all_partitions(self,
+                            txmin: Optional[int] = None,
+                            txmax: Optional[int] = None,
+    ) -> None:
+        """
+        Pull sync data from generator to Elasticsearch.
+        """
+        try:
+            logger.debug(f"Retrieving count for root table (limit and offset restriction)")
+            partition_context = {
+                'finished': False,
+                'offset': 0,
+                'row_count_for_partitioning': self._get_row_count(self.tree.build(self.nodes)),
+            }
+
+            while not partition_context['finished']:
+                self.es.bulk(self.index, self._partition_docs(partition_context, txmin, txmax))
+                partition_context['offset'] = partition_context['offset'] + INITIAL_PULL_ROWS_PER_SEGMENT
+                if partition_context['offset'] > partition_context['row_count_for_partitioning']:
+                    partition_context['finished'] = True
+
+        except Exception as e:
+            logger.exception(f"Exception {e}")
+            raise
+
     def _sync(
         self,
         filters: Optional[Dict] = None,
@@ -1124,7 +1274,7 @@ class Sync(Base):
         txmax = self.txid_current
         logger.debug(f"pull txmin: {txmin} txmax: {txmax}")
         # forward pass sync
-        self.sync(self._sync(txmin=txmin, txmax=txmax))
+        self.sync_all_partitions()
         self.checkpoint = txmax or self.txid_current
         # now sync up to txmax to capture everything we may have missed
         self.logical_slot_changes(txmin=txmin, txmax=txmax)

@@ -115,7 +115,7 @@ Resources:
                             Version: "1"
                         Configuration:
                             ConnectionArn: "{{codestar_connection_arn}}"
-                            BranchName: !Join [ '', [ !FindInMap [environmentMap, "dev", branch], "" ] ]
+                            BranchName: !Join [ '', [ !FindInMap [environmentMap, "{{env}}", branch], "" ] ]
                             FullRepositoryId: !Join [ "/", [ !Ref "githubOrganizationName", !Ref "githubRepoName" ] ]
                             OutputArtifactFormat: CODE_ZIP
                         OutputArtifacts:
